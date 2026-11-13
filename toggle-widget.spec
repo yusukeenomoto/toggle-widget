@@ -39,6 +39,11 @@ if IS_MAC:
             "CFBundleShortVersionString": VERSION,
             "CFBundleVersion": VERSION,
             "NSHighResolutionCapable": True,
+            # 日本語対応を宣言する。これで macOS 側が足すメニュー項目
+            # (フルスクリーンなど) や「情報」パネルも日本語になり、
+            # システム設定でアプリごとの言語も選べるようになる
+            "CFBundleDevelopmentRegion": "en",
+            "CFBundleLocalizations": ["en", "ja"],
         },
     )
 else:

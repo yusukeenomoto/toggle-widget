@@ -26,6 +26,82 @@ Python 3.10 以上 (tkinter 入り) が必要。
   - Homebrew の python を使う場合は `brew install python-tk` が必要
   - python.org のインストーラ版なら tkinter 同梱
 
+## data.json の編集
+
+中身 (タイトル・トグル・状態・ウインドウの大きさ) は data.json、見た目はスキン (後述) で決まる。
+
+- 開き方: ウィジェット下の「data.json を開く」、macOS ならメニューの「設定…」(⌘,) でも開ける
+  - macOS は .json に割り当てたアプリ (無ければテキストエディット)、Windows はメモ帳で開く
+  - テキストエディットは `"` を「“ ”」に置き換えることがある。編集 → 自動置換 →「スマート引用符」を切っておくとよい
+- 置き場所: macOS `~/Library/Application Support/toggle-widget/`、Windows `%APPDATA%\toggle-widget\`
+- 保存すると、アプリを開いたままでも約 1 秒で反映される
+- 書き間違えて読めないときは、ウィジェットの上に赤い帯で場所 (何行目何文字目) が出る。
+  その間アプリはファイルを上書きしないので、直して保存すればよい
+- ファイルを消すと、次に保存するとき既定の内容で作り直される
+
+| キー | 内容 |
+|---|---|
+| `title` | ヘッダーのタイトル |
+| `skin` | 使うスキンの名前 (`skins/<名前>.json`)。`"default"` は内蔵の標準スキン |
+| `window` | `width` 幅 / `height` 高さ (null なら中身に合わせる) |
+| `toggles[]` | トグルの行。上から順に並ぶ |
+| `toggles[].a` / `.b` | スイッチが false / true のときの文言 |
+| `toggles[].value` | スイッチの状態 (true / false) |
+| `toggles[].textbox` | true なら行の下にテキストボックスを出す |
+| `toggles[].text` | テキストボックスの内容 |
+
+足りないキーは既定値で補われる。
+
+以前の版の data.json (中に `design` があるもの) は、新しい版で初めて起動したときに自動で移す。
+見た目を変えていなければ標準スキンに、変えていれば `skins/my-skin.json` を作ってそれを使う。
+
+## スキン
+
+見た目 (色・フォント・余白・スイッチの大きさ) を 1 つの JSON にまとめたもの。
+data.json と同じフォルダの `skins/` に置くと、フッターの「スキン ▾」から選べる
+(「スキンフォルダを開く」でそのフォルダが開く)。
+
+```json
+{
+  "format": 1,
+  "name": "Ocean",
+  "author": "someone",
+  "design": {
+    "header": { "bg": "#0B3D5C" },
+    "toggle": { "on_color": "#00B4D8" }
+  }
+}
+```
+
+- ファイル名 (`ocean.json` なら `ocean`) が data.json の `skin` に入る名前。`name` / `author` はメニューの表示に使う
+- `design` に書いたキーだけが標準スキンを上書きする。色だけ変えるスキンなら数行でよい
+- `format` はスキンの形式の版 (今は 1)。アプリより新しい形式のスキンは読まない
+- 使用中のスキンを保存すると、すぐ見た目に反映される (作りながら確かめられる)
+- 読めない・値がおかしいスキンは赤い帯で知らせ、標準のスキンで表示する。アプリはスキンファイルに書き込まない
+- スキンは JSON なので、他の人が作ったものを入れてもプログラムは実行されない
+
+| キー | 内容 |
+|---|---|
+| `design.window` | 背景色 `bg` |
+| `design.font` | `family` (null なら OS 標準) / `title_size` / `text_size` / `footer_size` |
+| `design.header` | ヘッダーの `bg` / `fg` / `padding` |
+| `design.row` | 行の `bg` / `fg` / `fg_off` (false のときの文字色、null なら fg) / `padding` / `separator` |
+| `design.toggle` | 行のスイッチの `width` / `height` / `on_color` / `off_color` / `knob_color` |
+| `design.header_toggle` | ヘッダーの一括 OFF スイッチの `on_color` / `off_color` / `knob_color` |
+| `design.textbox` | テキストボックスの `bg` / `fg` / `border` / `focus_border` |
+| `design.footer` | フッターのリンクの色 `link_fg` |
+
+標準スキンの全部の値は `toggle_widget.py` の `DEFAULT_DESIGN` にある。
+
+## 表示言語
+
+メニューバー (macOS)・フッター・エラー表示・スキンメニューは OS の言語設定に合わせて日本語 / 英語になる。
+
+- macOS: システム設定の「優先する言語」で、日本語が英語より上にあれば日本語。
+  システム設定 → 一般 → 言語と地域 →「アプリケーション」で toggle-widget だけ言語を変えることもできる。
+  試すとき: `open dist/toggle-widget.app --args -AppleLanguages "(ja)"`
+- Windows: 表示言語が日本語なら日本語
+
 ## 配布時の注意
 
 署名していないので初回起動時に警告が出る。

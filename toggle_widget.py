@@ -57,9 +57,14 @@ def skins_dir() -> Path:
     return DATA_FILE.parent / "skins"
 
 
+def resource_dir() -> Path:
+    """アプリに同梱したファイルの場所 (PyInstaller で固めたときは展開先)。"""
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+
+
 def bundled_skins_dir() -> Path:
-    """アプリに同梱したサンプルスキンの場所 (PyInstaller で固めたときは展開先)。"""
-    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "skins"
+    """アプリに同梱したサンプルスキンの場所。"""
+    return resource_dir() / "skins"
 
 
 def prepare_skins_dir() -> None:
@@ -738,6 +743,13 @@ class App(tk.Tk):
                 pass
         self.lang = detect_language(self.objc)
         self.text = UI_TEXT[self.lang]
+        if IS_WIN:
+            # 指定しないとタイトルバーとタスクバーが Tk の羽根のアイコンになる。
+            # (macOS は .app のアイコンが Dock に出るので不要)
+            try:
+                self.iconbitmap(default=str(resource_dir() / "assets" / "icon.ico"))
+            except tk.TclError:
+                pass
 
         self.data = None
         self.design = None       # 標準スキン + 選んだスキン + ウインドウの大きさ

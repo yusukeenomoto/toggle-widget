@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="218.451 195.881 1023.577 1023.577">
+  <!-- Generator: Adobe Illustrator 30.6.0, SVG Export Plug-In . SVG Version: 2.1.4 Build 109)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: none;
+      }
+
+      .st1 {
+        clip-path: url(#clippath-1);
+      }
+
+      .st2 {
+        fill: #fff;
+      }
+
+      .st3 {
+        fill: #06f;
+        stroke: #231815;
+        stroke-miterlimit: 10;
+        stroke-width: 12px;
+      }
+
+      .st4 {
+        display: none;
+      }
+
+      .st5 {
+        clip-path: url(#clippath);
+      }
+
+      .st6 {
+        fill: #bfbfbf;
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="st0" x="318.41" y="295.84" width="823.66" height="823.66" rx="181.42" ry="181.42"/>
+    </clipPath>
+    <clipPath id="clippath-1">
+      <circle class="st0" cx="809.85" cy="707.67" r="184.25"/>
+    </clipPath>
+    <clipPath id="icon-body"><rect x="318.41" y="295.84" width="823.66" height="823.66" rx="181.42" ry="181.42"/></clipPath>
+  </defs>
+  <g clip-path="url(#icon-body)">
+  <g id="_レイヤー_1" data-name="レイヤー_1" class="st4">
+  </g>
+  <g id="_レイヤー_2" data-name="レイヤー_2">
+    <rect class="st2" x="318.41" y="295.84" width="823.66" height="823.66" rx="181.42" ry="181.42"/>
+  </g>
+  <g id="_レイヤー_4" data-name="レイヤー_4">
+    <rect class="st6" x="318.41" y="295.84" width="823.66" height="823.66" rx="181.42" ry="181.42"/>
+    <g>
+      <rect class="st2" x="-131.42" y="361.67" width="1048.96" height="62.77" transform="translate(-162.81 393.05) rotate(-45)"/>
+      <polyline class="st2" points="126 867.72 81.62 823.34 823.34 81.62 867.72 126 208.41 785.31"/>
+      <polyline class="st2" points="207.61 949.34 163.23 904.95 904.95 163.23 949.34 207.61 372.44 784.51"/>
+      <polyline class="st2" points="289.23 1030.95 244.85 986.57 986.57 244.85 1030.95 289.23 536.47 783.71"/>
+      <polyline class="st2" points="370.84 1112.57 326.46 1068.18 1068.18 326.46 1112.57 370.84 700.5 782.91"/>
+      <polyline class="st2" points="452.46 1194.18 408.08 1149.8 1149.8 408.08 1194.18 452.46 864.53 782.11"/>
+      <polyline class="st2" points="534.07 1275.8 489.69 1231.42 1231.42 489.69 1275.8 534.07 1028.56 781.32"/>
+      <polyline class="st2" points="615.69 1357.41 571.31 1313.03 1313.03 571.31 1357.41 615.69 1192.59 780.52"/>
+      <polyline class="st2" points="697.3 1439.03 652.92 1394.65 1394.65 652.92 1439.03 697.3 1356.62 779.72"/>
+      <polyline class="st2" points="778.92 1520.64 734.54 1476.26 1476.26 734.54 1520.64 778.92"/>
+    </g>
+    <path class="st6" d="M960.65,315.84c42.92,0,83.4,16.85,113.98,47.43,30.59,30.59,47.43,71.07,47.43,113.98v460.82c0,42.92-16.85,83.4-47.43,113.98-30.59,30.59-71.07,47.43-113.98,47.43h-460.82c-42.92,0-83.4-16.85-113.98-47.43-30.59-30.59-47.43-71.07-47.43-113.98v-460.82c0-42.92,16.85-83.4,47.43-113.98,30.59-30.59,71.07-47.43,113.98-47.43h460.82M960.65,295.84h-460.82c-99.78,0-181.42,81.64-181.42,181.42v460.82c0,99.78,81.64,181.42,181.42,181.42h460.82c99.78,0,181.42-81.64,181.42-181.42v-460.82c0-99.78-81.64-181.42-181.42-181.42h0Z"/>
+    <g class="st5">
+      <rect class="st3" x="88.68" y="509.25" width="926.68" height="396.85" rx="106.47" ry="106.47"/>
+    </g>
+    <g class="st1">
+      <g>
+        <circle class="st6" cx="809.85" cy="707.67" r="184.25"/>
+        <circle class="st2" cx="809.85" cy="722.17" r="184.25"/>
+      </g>
+    </g>
+  </g>
+  </g>
+</svg>

@@ -104,6 +104,23 @@ data.json と同じフォルダの `skins/` に置くと、フッターの「ス
   試すとき: `open dist/toggle-widget.app --args -AppleLanguages "(ja)"`
 - Windows: 表示言語が日本語なら日本語
 
+## アイコン
+
+元データは `assets/icon.svg`。変えたら macOS で次を実行し、できたファイルもコミットする
+(ビルド時には作り直さない)。
+
+```sh
+pip install resvg-py pillow
+python assets/build_icons.py                       # assets/icon.svg から作り直す
+python assets/build_icons.py ~/Desktop/toggle.svg  # Illustrator から書き出した SVG を取り込んで作る
+```
+
+取り込むときは、埋め込み画像 (下絵) を外し、本体の角丸四角がアイコン格子 (1024 のうち 824) に
+来るよう切り出し、角丸四角からはみ出した部分を切り取ってから `assets/icon.svg` に保存する。
+
+`assets/icon.icns` (macOS の .app)・`assets/icon.ico` (Windows の .exe とウインドウ)・
+`assets/icon.png` (1024x1024) ができる。
+
 ## 配布時の注意
 
 署名していないので初回起動時に警告が出る。

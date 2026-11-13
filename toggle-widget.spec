@@ -8,13 +8,14 @@
 import sys
 
 APP_NAME = "toggle-widget"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 IS_MAC = sys.platform == "darwin"
 
 a = Analysis(
     ["toggle_widget.py"],
-    # サンプルスキン。初回起動時にユーザーの skins フォルダへコピーされる
-    datas=[("skins/*.json", "skins")],
+    # サンプルスキン (初回起動時にユーザーの skins フォルダへコピーされる) と、
+    # Windows でウインドウのタイトルバー・タスクバーに出すアイコン
+    datas=[("skins/*.json", "skins")] + ([] if IS_MAC else [("assets/icon.ico", "assets")]),
     # 使っていない標準ライブラリを外してサイズを減らす
     excludes=["unittest", "pydoc", "doctest", "test"],
 )
@@ -35,6 +36,7 @@ if IS_MAC:
     app = BUNDLE(
         coll,
         name=f"{APP_NAME}.app",
+        icon="assets/icon.icns",
         bundle_identifier="com.eeenoooo.toggle-widget",
         info_plist={
             "CFBundleDisplayName": APP_NAME,
@@ -57,6 +59,7 @@ else:
         a.datas,
         [],
         name=APP_NAME,
+        icon="assets/icon.ico",   # エクスプローラーでの .exe のアイコン
         console=False,
         upx=False,
     )

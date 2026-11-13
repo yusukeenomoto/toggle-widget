@@ -12,8 +12,9 @@ PyInstaller はクロスコンパイルできないので、各 OS 上でビル�
 
 `.github/workflows/build.yml` が Windows / macOS ランナーで両方ビルドする。
 
-- `v1.0.0` のようなタグを push する、または Actions 画面から `build` を手動実行
-- 実行結果の Artifacts に `toggle-widget-Windows` / `toggle-widget-macOS` が上がる
+- `v1.0.0` のようなタグを push すると、ビルド後にそのタグの Release が作られ、
+  `toggle-widget-windows.zip` / `toggle-widget-macos.dmg` が添付される
+- Actions 画面から `build` を手動実行した場合は Release は作らず、実行結果の Artifacts にだけ上がる
 - macOS は `macos-latest` (Apple Silicon) 向け
 
 ## 手元でビルド

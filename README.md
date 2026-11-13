@@ -73,6 +73,8 @@ data.json と同じフォルダの `skins/` に置くと、フッターの「ス
 }
 ```
 
+- サンプルとしてダークモードの `skins/dark.json` を同梱している。初めて起動したとき (skins フォルダが無いとき) だけ
+  ユーザーの skins フォルダにコピーされるので、自分のスキンを作るときの雛形にできる。消しても次の起動で戻らない
 - ファイル名 (`ocean.json` なら `ocean`) が data.json の `skin` に入る名前。`name` / `author` はメニューの表示に使う
 - `design` に書いたキーだけが標準スキンを上書きする。色だけ変えるスキンなら数行でよい
 - `format` はスキンの形式の版 (今は 1)。アプリより新しい形式のスキンは読まない
@@ -84,10 +86,10 @@ data.json と同じフォルダの `skins/` に置くと、フッターの「ス
 |---|---|
 | `design.window` | 背景色 `bg` |
 | `design.font` | `family` (null なら OS 標準) / `title_size` / `text_size` / `footer_size` |
-| `design.header` | ヘッダーの `bg` / `fg` / `padding` |
+| `design.header` | ヘッダーの `bg` / `fg` / `padding` / `align` (タイトルの位置: `"left"` / `"center"` / `"right"`) |
 | `design.row` | 行の `bg` / `fg` / `fg_off` (false のときの文字色、null なら fg) / `padding` / `separator` |
-| `design.toggle` | 行のスイッチの `width` / `height` / `on_color` / `off_color` / `knob_color` |
-| `design.header_toggle` | ヘッダーの一括 OFF スイッチの `on_color` / `off_color` / `knob_color` |
+| `design.toggle` | 行のスイッチの `width` / `height` / `radius` (角丸の半径。null なら丸い形、0 なら四角) / `on_color` / `off_color` / `knob_color` / `knob_outline` (つまみの縁の色、null なら縁なし)。大きさと形はヘッダーのスイッチにも使う |
+| `design.header_toggle` | ヘッダーの一括 OFF スイッチの `on_color` / `off_color` / `knob_color` / `knob_outline` |
 | `design.textbox` | テキストボックスの `bg` / `fg` / `border` / `focus_border` |
 | `design.footer` | フッターのリンクの色 `link_fg` |
 

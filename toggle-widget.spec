@@ -13,6 +13,8 @@ IS_MAC = sys.platform == "darwin"
 
 a = Analysis(
     ["toggle_widget.py"],
+    # サンプルスキン。初回起動時にユーザーの skins フォルダへコピーされる
+    datas=[("skins/*.json", "skins")],
     # 使っていない標準ライブラリを外してサイズを減らす
     excludes=["unittest", "pydoc", "doctest", "test"],
 )

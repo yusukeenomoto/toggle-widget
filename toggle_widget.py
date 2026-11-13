@@ -19,6 +19,7 @@ import copy
 import ctypes
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tkinter as tk
@@ -56,6 +57,27 @@ def skins_dir() -> Path:
     return DATA_FILE.parent / "skins"
 
 
+def bundled_skins_dir() -> Path:
+    """アプリに同梱したサンプルスキンの場所 (PyInstaller で固めたときは展開先)。"""
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "skins"
+
+
+def prepare_skins_dir() -> None:
+    """skins フォルダが無ければ作り、同梱のサンプルスキンを入れる。
+
+    消したサンプルが次の起動で戻ってこないよう、入れるのはフォルダを作るときだけ。
+    """
+    folder = skins_dir()
+    if folder.exists():
+        return
+    try:
+        folder.mkdir(parents=True)
+        for src in sorted(bundled_skins_dir().glob("*.json")):
+            shutil.copyfile(src, folder / src.name)
+    except OSError as e:
+        print(f"サンプルスキンを用意できませんでした: {e}")
+
+
 # toggles の 1 件分。value が false なら a、true なら b を表示する。
 # textbox が true なら行の下にテキストボックスを置き、入力内容を text に保存する
 DEFAULT_TOGGLE = {"a": "", "b": "", "value": False, "textbox": False, "text": ""}
@@ -82,22 +104,27 @@ DEFAULT_DESIGN = {
     "window": {"bg": "#F2F2F7"},
     # family が null なら OS の標準フォント
     "font": {"family": None, "title_size": 16, "text_size": 13, "footer_size": 11},
-    "header": {"bg": "#2C2C2E", "fg": "#FFFFFF", "padding": 16},
+    # align はタイトルの位置: "left" / "center" / "right"
+    "header": {"bg": "#2C2C2E", "fg": "#FFFFFF", "padding": 16, "align": "left"},
     # fg_off はトグルが false (A を表示) のときの文字色。null なら fg と同じ
     "row": {"bg": "#FFFFFF", "fg": "#1C1C1E", "fg_off": None,
             "padding": 12, "separator": "#D1D1D6"},
+    # width / height / radius はヘッダーの一括 OFF スイッチにも使う
     "toggle": {
         "width": 52,
         "height": 28,
+        "radius": None,              # 角丸の半径。null なら丸い形、0 なら四角
         "on_color": "#34C759",   # macOS のグリーン
         "off_color": "#C7C7CC",
         "knob_color": "#FFFFFF",
+        "knob_outline": "#D0D0D0",   # つまみの縁の色。null なら縁なし
     },
-    # ヘッダー右端の一括 OFF スイッチ。大きさは toggle と同じ
+    # ヘッダー右端の一括 OFF スイッチ。大きさと形は toggle と同じ
     "header_toggle": {
         "on_color": "#0A84FF",   # リストのスイッチと見分けるため青
         "off_color": "#636366",  # 暗いヘッダーの上でも見える灰色
         "knob_color": "#FFFFFF",
+        "knob_outline": "#D0D0D0",
     },
     "textbox": {
         "bg": "#F2F2F7",
@@ -555,7 +582,7 @@ class ToggleSwitch(tk.Canvas):
 
     def __init__(self, master, value=False, command=None, bg="#FFFFFF",
                  width=52, height=28, on_color="#34C759", off_color="#C7C7CC",
-                 knob_color="#FFFFFF"):
+                 knob_color="#FFFFFF", knob_outline="#D0D0D0", radius=None):
         super().__init__(
             master,
             width=width,
@@ -568,6 +595,10 @@ class ToggleSwitch(tk.Canvas):
         self._on_color = on_color
         self._off_color = off_color
         self._knob_color = knob_color
+        # Tk は None を渡すと既定の黒い縁を描くので、None は「縁なし」の "" にする
+        self._knob_outline = knob_outline or ""
+        # 角丸の半径。None なら高さの半分 (両端が半円の丸い形)、0 なら四角
+        self._radius = height / 2 if radius is None else min(radius, height / 2)
         self._value = bool(value)
         self._command = command
         self._enabled = True
@@ -584,17 +615,46 @@ class ToggleSwitch(tk.Canvas):
 
     def _draw(self) -> None:
         self.delete("all")
-        w, h, pad = self.W, self.H, self.PAD
+        w, h, pad, r = self.W, self.H, self.PAD, self._radius
         color = self._on_color if self._value else self._off_color
-        # トラック (角丸の長方形)
-        self.create_oval(0, 0, h, h, fill=color, outline="")
-        self.create_oval(w - h, 0, w, h, fill=color, outline="")
-        self.create_rectangle(h / 2, 0, w - h / 2, h, fill=color, outline="")
-        # つまみ
+        # トラック
+        if r >= h / 2:
+            # 両端が半円の丸い形 (標準)
+            self.create_oval(0, 0, h, h, fill=color, outline="")
+            self.create_oval(w - h, 0, w, h, fill=color, outline="")
+            self.create_rectangle(h / 2, 0, w - h / 2, h, fill=color, outline="")
+        else:
+            self._rounded_rect(0, 0, w, h, r, color, "")
+        # つまみ。角はトラックの角から余白の分だけ小さくし、同心の形にそろえる
         d = h - 2 * pad
-        self.create_oval(
-            self._x, pad, self._x + d, pad + d, fill=self._knob_color, outline="#d0d0d0"
-        )
+        x, kr = self._x, max(r - pad, 0)
+        if kr >= d / 2:
+            self.create_oval(x, pad, x + d, pad + d, fill=self._knob_color,
+                             outline=self._knob_outline)
+        else:
+            self._rounded_rect(x, pad, x + d, pad + d, kr, self._knob_color, self._knob_outline)
+
+    def _rounded_rect(self, x1, y1, x2, y2, r, fill, outline) -> None:
+        """角丸の長方形。角は正確な円弧で描き、縁は継ぎ目が出ないよう線と弧で一周させる。"""
+        if r <= 0:
+            self.create_rectangle(x1, y1, x2, y2, fill=fill, outline=outline)
+            return
+        corners = ((x1 + r, y1 + r, 90), (x2 - r, y1 + r, 0),
+                   (x2 - r, y2 - r, 270), (x1 + r, y2 - r, 180))
+        # 塗り: 十字の 2 枚の長方形と、四隅の扇形
+        self.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline="")
+        self.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, outline="")
+        for cx, cy, start in corners:
+            self.create_arc(cx - r, cy - r, cx + r, cy + r, start=start, extent=90,
+                            style="pieslice", fill=fill, outline="")
+        if not outline:
+            return
+        for cx, cy, start in corners:
+            self.create_arc(cx - r, cy - r, cx + r, cy + r, start=start, extent=90,
+                            style="arc", outline=outline)
+        for line in ((x1 + r, y1, x2 - r, y1), (x2, y1 + r, x2, y2 - r),
+                     (x1 + r, y2, x2 - r, y2), (x1, y1 + r, x1, y2 - r)):
+            self.create_line(*line, fill=outline)
 
     def _cancel_animation(self) -> None:
         if self._after_id:
@@ -636,8 +696,21 @@ class ToggleSwitch(tk.Canvas):
 # --------------------------------------------------------------------------
 # アプリ本体
 # --------------------------------------------------------------------------
+# design.header.align の値と、タイトルのラベルの anchor
+HEADER_ANCHORS = {"left": "w", "center": "center", "right": "e"}
+
 # data.json やスキンの値がおかしいときに画面作りで出うる例外
 BUILD_ERRORS = (tk.TclError, TypeError, ValueError, KeyError, AttributeError)
+
+
+def as_radius(value, name: str):
+    """角丸の半径の設定。null か 0 以上の数でなければ、どのキーかが分かる例外にする。"""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)}"
+                         " (null か 0 以上の数 / null or a number >= 0)")
+    return value
 
 
 def as_int(value, name: str) -> int:
@@ -679,10 +752,8 @@ class App(tk.Tk):
         self._skin_stamp = None
         self._width_setting = self._height_setting = None
 
-        try:
-            skins_dir().mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
+        # 旧形式からの移行で skins を作るより先に、サンプルを入れておく
+        prepare_skins_dir()
 
         # data.json やスキンが読めないときに、上に出す帯
         self.banner = tk.Label(self, bg=self.ERROR_BG, fg=self.ERROR_FG,
@@ -772,6 +843,7 @@ class App(tk.Tk):
         win, header_d, row_d = design["window"], design["header"], design["row"]
         toggle_d, header_toggle_d = design["toggle"], design["header_toggle"]
         font_d = design["font"]
+        radius = as_radius(toggle_d["radius"], "toggle.radius")
 
         self.configure(bg=win["bg"])
         frame.configure(bg=win["bg"])
@@ -798,12 +870,22 @@ class App(tk.Tk):
             on_color=header_toggle_d["on_color"],
             off_color=header_toggle_d["off_color"],
             knob_color=header_toggle_d["knob_color"],
+            knob_outline=header_toggle_d["knob_outline"],
+            radius=radius,
         )
+        align = header_d["align"]
+        if align not in HEADER_ANCHORS:
+            raise ValueError(f"header.align: {json.dumps(align, ensure_ascii=False)}"
+                             f" ({' / '.join(HEADER_ANCHORS)})")
         # 先に右へ置き、タイトルが長くてもスイッチが押し出されないようにする
         self.master_switch.pack(side="right", padx=(header_d["padding"], 0))
+        if align == "center":
+            # スイッチと同じ幅の見えない余白を左に置き、ヘッダー全体の中央にそろえる
+            tk.Frame(header, bg=header_d["bg"], height=1,
+                     width=toggle_d["width"] + header_d["padding"]).pack(side="left")
         tk.Label(
             header, text=self.data["title"], bg=header_d["bg"], fg=header_d["fg"],
-            font=title_font, anchor="w",
+            font=title_font, anchor=HEADER_ANCHORS[align], justify=align,
         ).pack(side="left", fill="x", expand=True)
 
         # トグルの行を並べる白いカード
@@ -860,6 +942,8 @@ class App(tk.Tk):
             on_color=toggle_d["on_color"],
             off_color=toggle_d["off_color"],
             knob_color=toggle_d["knob_color"],
+            knob_outline=toggle_d["knob_outline"],
+            radius=as_radius(toggle_d["radius"], "toggle.radius"),
         )
         switch.grid(row=0, column=1, sticky="e")
 

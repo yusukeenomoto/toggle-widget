@@ -1,0 +1,34 @@
+{
+  "format": 1,
+  "name": "Dark",
+  "author": "toggle-widget",
+  "design": {
+    "window": { "bg": "#000000" },
+    "header": { "bg": "#1C1C1E", "fg": "#FFFFFF" },
+    "row": {
+      "bg": "#2C2C2E",
+      "fg": "#FFFFFF",
+      "fg_off": "#AEAEB2",
+      "separator": "#3A3A3C"
+    },
+    "toggle": {
+      "on_color": "#30D158",
+      "off_color": "#48484A",
+      "knob_color": "#FFFFFF",
+      "knob_outline": null
+    },
+    "header_toggle": {
+      "on_color": "#0A84FF",
+      "off_color": "#48484A",
+      "knob_color": "#FFFFFF",
+      "knob_outline": null
+    },
+    "textbox": {
+      "bg": "#1C1C1E",
+      "fg": "#FFFFFF",
+      "border": "#3A3A3C",
+      "focus_border": "#0A84FF"
+    },
+    "footer": { "link_fg": "#0A84FF" }
+  }
+}

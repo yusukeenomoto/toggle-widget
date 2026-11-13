@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""tkinter トグルスイッチで表示を切り替えるシンプルなウィジェット (macOS / Windows 対応)
+"""tkinter トグルスイッチで A / B の表示を切り替えるシンプルなウィジェット (macOS / Windows 対応)
 
-- トグル OFF : 一覧表示 (Treeview)
-- トグル ON  : JSON 表示 (整形されたテキスト)
-- データとスイッチの状態は data.json に保存される
-  (Windows: %APPDATA%\\ToggleView / macOS: ~/Library/Application Support/ToggleView)
+- ヘッダー : タイトル
+- その下   : トグルの行。右端にトグルスイッチ、その左に A / B のテキスト
+- タイトル・トグルの数とテキスト・デザイン・スイッチの状態は data.json で扱う
+  (Windows: %APPDATA%\\toggle-widget / macOS: ~/Library/Application Support/toggle-widget)
 """
 
 import copy
@@ -13,15 +13,14 @@ import os
 import sys
 import tkinter as tk
 from pathlib import Path
-from tkinter import ttk
+from tkinter import font as tkfont
 
-APP_NAME = "ToggleView"
+APP_NAME = "toggle-widget"
 
 # ---- OS ごとの違いをここに集約 ----
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform == "win32"
 HAND_CURSOR = "pointinghand" if IS_MAC else "hand2"   # pointinghand は macOS 専用
-MONO_FONT = "Menlo" if IS_MAC else ("Consolas" if IS_WIN else "DejaVu Sans Mono")
 
 
 def get_data_file() -> Path:
@@ -42,28 +41,70 @@ def get_data_file() -> Path:
 
 DATA_FILE = get_data_file()
 
+# toggles の 1 件分。value が false なら a、true なら b を表示する
+DEFAULT_TOGGLE = {"a": "", "b": "", "value": False}
+
 DEFAULT_DATA = {
-    "settings": {"json_view": False},
-    "items": [
-        {"id": 1, "name": "りんご", "price": 120, "tags": ["果物", "赤"]},
-        {"id": 2, "name": "バナナ", "price": 80, "tags": ["果物", "黄"]},
-        {"id": 3, "name": "牛乳", "price": 210, "tags": ["飲料"]},
+    "title": "Toggle Widget",
+    "toggles": [
+        {"a": "A: 通知を受け取らない", "b": "B: 通知を受け取る", "value": False},
+        {"a": "A: ライトモード", "b": "B: ダークモード", "value": False},
+        {"a": "A: 自動保存しない", "b": "B: 自動保存する", "value": True},
     ],
+    "design": {
+        # height が null ならトグルの数に合わせて自動で決める
+        "window": {"width": 420, "height": None, "bg": "#F2F2F7"},
+        # family が null なら OS の標準フォント
+        "font": {"family": None, "title_size": 16, "text_size": 13},
+        "header": {"bg": "#2C2C2E", "fg": "#FFFFFF", "padding": 16},
+        # fg_off はトグルが false (A を表示) のときの文字色。null なら fg と同じ
+        "row": {"bg": "#FFFFFF", "fg": "#1C1C1E", "fg_off": None,
+                "padding": 12, "separator": "#D1D1D6"},
+        "toggle": {
+            "width": 52,
+            "height": 28,
+            "on_color": "#34C759",   # macOS のグリーン
+            "off_color": "#C7C7CC",
+            "knob_color": "#FFFFFF",
+        },
+    },
 }
 
 
 # --------------------------------------------------------------------------
 # JSON の読み書き
 # --------------------------------------------------------------------------
+def merge_defaults(data: dict, defaults: dict) -> dict:
+    """defaults にあって data に無いキーを補う (入れ子の dict も)。"""
+    for key, value in defaults.items():
+        if isinstance(value, dict):
+            if not isinstance(data.get(key), dict):
+                data[key] = {}
+            merge_defaults(data[key], value)
+        else:
+            data.setdefault(key, copy.deepcopy(value))
+    return data
+
+
+def normalize(data: dict) -> dict:
+    """足りない項目を既定値で補い、toggles を dict のリストにそろえる。"""
+    merge_defaults(data, DEFAULT_DATA)
+    if not isinstance(data["toggles"], list):
+        data["toggles"] = copy.deepcopy(DEFAULT_DATA["toggles"])
+    data["toggles"] = [
+        merge_defaults(t, DEFAULT_TOGGLE) for t in data["toggles"] if isinstance(t, dict)
+    ]
+    return data
+
+
 def load_data() -> dict:
     """data.json を読み込む。無い・壊れている場合はデフォルトを返す。"""
     if DATA_FILE.exists():
         try:
             with DATA_FILE.open("r", encoding="utf-8") as f:
                 data = json.load(f)
-            data.setdefault("settings", {}).setdefault("json_view", False)
-            data.setdefault("items", [])
-            return data
+            if isinstance(data, dict):
+                return normalize(data)
         except (json.JSONDecodeError, OSError):
             pass
     data = copy.deepcopy(DEFAULT_DATA)
@@ -83,32 +124,29 @@ def save_data(data: dict) -> None:
 # トグルスイッチ (Canvas で描画)
 # --------------------------------------------------------------------------
 class ToggleSwitch(tk.Canvas):
-    W, H, PAD = 52, 28, 3
-    COLOR_ON = "#34C759"   # macOS のグリーン
-    COLOR_OFF = "#C7C7CC"
+    PAD = 3
 
-    def __init__(self, master, value=False, command=None):
+    def __init__(self, master, value=False, command=None, bg="#FFFFFF",
+                 width=52, height=28, on_color="#34C759", off_color="#C7C7CC",
+                 knob_color="#FFFFFF"):
         super().__init__(
             master,
-            width=self.W,
-            height=self.H,
-            bg=self._parent_bg(master),
+            width=width,
+            height=height,
+            bg=bg,
             highlightthickness=0,
             cursor=HAND_CURSOR,
         )
+        self.W, self.H = width, height
+        self._on_color = on_color
+        self._off_color = off_color
+        self._knob_color = knob_color
         self._value = bool(value)
         self._command = command
         self._after_id = None
         self._x = self._target_x()
         self._draw()
         self.bind("<Button-1>", lambda _e: self.toggle())
-
-    @staticmethod
-    def _parent_bg(master) -> str:
-        try:
-            return master.winfo_toplevel().cget("bg")
-        except tk.TclError:
-            return "#ececec"
 
     def _target_x(self) -> float:
         d = self.H - 2 * self.PAD
@@ -117,7 +155,7 @@ class ToggleSwitch(tk.Canvas):
     def _draw(self) -> None:
         self.delete("all")
         w, h, pad = self.W, self.H, self.PAD
-        color = self.COLOR_ON if self._value else self.COLOR_OFF
+        color = self._on_color if self._value else self._off_color
         # トラック (角丸の長方形)
         self.create_oval(0, 0, h, h, fill=color, outline="")
         self.create_oval(w - h, 0, w, h, fill=color, outline="")
@@ -125,7 +163,7 @@ class ToggleSwitch(tk.Canvas):
         # つまみ
         d = h - 2 * pad
         self.create_oval(
-            self._x, pad, self._x + d, pad + d, fill="white", outline="#d0d0d0"
+            self._x, pad, self._x + d, pad + d, fill=self._knob_color, outline="#d0d0d0"
         )
 
     def _animate(self) -> None:
@@ -160,82 +198,95 @@ class ToggleSwitch(tk.Canvas):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Toggle View")
-        self.geometry("420x320")
-        self.minsize(360, 260)
-
         self.data = load_data()
+        design = self.data["design"]
+        win, header_d, row_d = design["window"], design["header"], design["row"]
 
-        # ヘッダー: ラベル + トグル + 現在のモード名
-        header = ttk.Frame(self, padding=(12, 12, 12, 6))
+        self.title(self.data["title"])
+        self.configure(bg=win["bg"])
+
+        family = design["font"]["family"] or tkfont.nametofont("TkDefaultFont").actual("family")
+        title_font = tkfont.Font(family=family, size=design["font"]["title_size"], weight="bold")
+        self.text_font = tkfont.Font(family=family, size=design["font"]["text_size"])
+
+        # ヘッダー: タイトル
+        header = tk.Frame(self, bg=header_d["bg"], padx=header_d["padding"],
+                          pady=header_d["padding"] * 3 // 4)
         header.pack(fill="x")
-        ttk.Label(header, text="JSON表示").pack(side="left")
-        self.toggle = ToggleSwitch(
-            header,
-            value=self.data["settings"]["json_view"],
-            command=self.on_toggle,
-        )
-        self.toggle.pack(side="left", padx=10)
-        self.mode_label = ttk.Label(header, text="")
-        self.mode_label.pack(side="left")
+        tk.Label(
+            header, text=self.data["title"], bg=header_d["bg"], fg=header_d["fg"],
+            font=title_font,
+        ).pack(side="left")
 
-        # 表示領域
-        body = ttk.Frame(self, padding=(12, 0, 12, 12))
-        body.pack(fill="both", expand=True)
+        # トグルの行を並べる白いカード
+        card = tk.Frame(self, bg=row_d["bg"])
+        card.pack(fill="x", padx=16, pady=16)
+        self.rows = []
+        for i, item in enumerate(self.data["toggles"]):
+            if i:
+                tk.Frame(card, bg=row_d["separator"], height=1).pack(fill="x")
+            self.rows.append(self._build_row(card, item))
 
-        # 一覧ビュー
-        self.list_view = ttk.Treeview(
-            body, columns=("name", "price", "tags"), show="headings"
-        )
-        for col, title, width in (
-            ("name", "名前", 120),
-            ("price", "価格", 70),
-            ("tags", "タグ", 140),
-        ):
-            self.list_view.heading(col, text=title)
-            self.list_view.column(col, width=width, anchor="w")
+        # 幅は設定値、高さは設定値か中身に合わせる
+        self.update_idletasks()
+        height = win["height"] or self.winfo_reqheight()
+        self.geometry(f"{win['width']}x{height}")
+        self.minsize(280, min(height, 160))
 
-        # JSON ビュー
-        self.json_view = tk.Text(body, wrap="none", font=(MONO_FONT, 12))
-
-        self.refresh()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    # ---- 表示更新 ----
-    def refresh(self) -> None:
-        use_json = self.data["settings"]["json_view"]
-        self.mode_label.config(text="JSON" if use_json else "一覧")
+    def _build_row(self, master, item: dict) -> tk.Label:
+        """右端にトグル、その左に A / B のテキストを置いた 1 行を作る。"""
+        row_d = self.data["design"]["row"]
+        toggle_d = self.data["design"]["toggle"]
+        pad = row_d["padding"]
 
-        if use_json:
-            self.list_view.pack_forget()
-            self.json_view.config(state="normal")
-            self.json_view.delete("1.0", "end")
-            self.json_view.insert(
-                "1.0", json.dumps(self.data, ensure_ascii=False, indent=2)
-            )
-            self.json_view.config(state="disabled")
-            self.json_view.pack(fill="both", expand=True)
+        row = tk.Frame(master, bg=row_d["bg"], padx=pad, pady=pad)
+        row.pack(fill="x")
+        row.columnconfigure(0, weight=1)
+
+        label = tk.Label(
+            row, bg=row_d["bg"], fg=row_d["fg"], font=self.text_font,
+            anchor="w", justify="left",
+        )
+        label.grid(row=0, column=0, sticky="we", padx=(0, pad))
+
+        def on_toggle(value: bool) -> None:
+            item["value"] = value
+            self.update_row(label, item)
+            save_data(self.data)
+
+        ToggleSwitch(
+            row,
+            value=item["value"],
+            command=on_toggle,
+            bg=row_d["bg"],
+            width=toggle_d["width"],
+            height=toggle_d["height"],
+            on_color=toggle_d["on_color"],
+            off_color=toggle_d["off_color"],
+            knob_color=toggle_d["knob_color"],
+        ).grid(row=0, column=1, sticky="e")
+
+        # 行の幅に合わせてテキストを折り返す。高さの自動計算に間に合うよう、
+        # 最初は設定上のウィンドウ幅 (カードの左右余白 16 を引く) から求めておく
+        def wrap_for(row_width: int) -> int:
+            return max(row_width - toggle_d["width"] - 3 * pad, 60)
+
+        label.config(wraplength=wrap_for(self.data["design"]["window"]["width"] - 32))
+        row.bind("<Configure>", lambda e: label.config(wraplength=wrap_for(e.width)))
+        self.update_row(label, item)
+        return label
+
+    # ---- 表示更新 ----
+    def update_row(self, label: tk.Label, item: dict) -> None:
+        row_d = self.data["design"]["row"]
+        if item["value"]:
+            label.config(text=item["b"], fg=row_d["fg"])
         else:
-            self.json_view.pack_forget()
-            self.list_view.delete(*self.list_view.get_children())
-            for item in self.data["items"]:
-                self.list_view.insert(
-                    "",
-                    "end",
-                    values=(
-                        item.get("name", ""),
-                        item.get("price", ""),
-                        ", ".join(item.get("tags", [])),
-                    ),
-                )
-            self.list_view.pack(fill="both", expand=True)
+            label.config(text=item["a"], fg=row_d["fg_off"] or row_d["fg"])
 
     # ---- イベント ----
-    def on_toggle(self, value: bool) -> None:
-        self.data["settings"]["json_view"] = value
-        save_data(self.data)
-        self.refresh()
-
     def on_close(self) -> None:
         save_data(self.data)
         self.destroy()

@@ -1,31 +1,20 @@
-# ToggleView
+# toggle-widget
 
 tkinter のトグル表示ウィジェット (`toggle_widget.py`) を PyInstaller で配布物にする。
 PyInstaller はクロスコンパイルできないので、各 OS 上でビルドする。
 
 | OS | 成果物 |
 |---|---|
-| Windows | `dist/ToggleView.exe` (単一ファイル) |
-| macOS | `dist/ToggleView.app` と `ToggleView-macos.dmg` |
+| Windows | `dist/toggle-widget.exe` (単一ファイル) |
+| macOS | `dist/toggle-widget.app` と `toggle-widget-macos.dmg` |
 
 ## GitHub Actions でビルド
 
 `.github/workflows/build.yml` が Windows / macOS ランナーで両方ビルドする。
 
 - `v1.0.0` のようなタグを push する、または Actions 画面から `build` を手動実行
-- 実行結果の Artifacts に `ToggleView-Windows` / `ToggleView-macOS` が上がる
+- 実行結果の Artifacts に `toggle-widget-Windows` / `toggle-widget-macOS` が上がる
 - macOS は `macos-latest` (Apple Silicon) 向け
-
-## podman でビルド (Linux 上で Windows 版)
-
-Wine 上の Windows 版 Python 3.12 + PyInstaller で本物の `.exe` を作る。macOS 版は作れない。
-
-```sh
-./podman/build.sh image    # 初回のみ。ビルド用イメージを作る (Windows 用は約 3.7GB)
-./podman/build.sh windows  # dist/windows/ToggleView.exe
-./podman/build.sh check    # exe を Wine + Xvfb で起動して dist/screenshot-windows.png を撮る
-./podman/build.sh linux    # dist/linux/ToggleView (spec の確認用)
-```
 
 ## 手元でビルド
 

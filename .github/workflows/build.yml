@@ -29,23 +29,23 @@ jobs:
           python -m pip install -r requirements-build.txt
 
       - name: Build
-        run: pyinstaller --noconfirm --clean ToggleView.spec
+        run: pyinstaller --noconfirm --clean toggle-widget.spec
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path dist/ToggleView.exe -DestinationPath ToggleView-windows.zip
+        run: Compress-Archive -Path dist/toggle-widget.exe -DestinationPath toggle-widget-windows.zip
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
-          hdiutil create -volname ToggleView -srcfolder dist/ToggleView.app \
-            -ov -format UDZO ToggleView-macos.dmg
+          hdiutil create -volname toggle-widget -srcfolder dist/toggle-widget.app \
+            -ov -format UDZO toggle-widget-macos.dmg
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ToggleView-${{ runner.os }}
+          name: toggle-widget-${{ runner.os }}
           path: |
-            ToggleView-windows.zip
-            ToggleView-macos.dmg
+            toggle-widget-windows.zip
+            toggle-widget-macos.dmg
           if-no-files-found: error

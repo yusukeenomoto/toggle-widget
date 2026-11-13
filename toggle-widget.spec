@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller ビルド定義 (Windows / macOS 共通)
-#   pyinstaller --noconfirm --clean ToggleView.spec
+#   pyinstaller --noconfirm --clean toggle-widget.spec
 #
-# - Windows : dist/ToggleView.exe   (単一ファイル)
-# - macOS   : dist/ToggleView.app   (アプリバンドル)
+# - Windows : dist/toggle-widget.exe   (単一ファイル)
+# - macOS   : dist/toggle-widget.app   (アプリバンドル)
 
 import sys
 
-APP_NAME = "ToggleView"
+APP_NAME = "toggle-widget"
 VERSION = "1.0.0"
 IS_MAC = sys.platform == "darwin"
 
@@ -33,7 +33,7 @@ if IS_MAC:
     app = BUNDLE(
         coll,
         name=f"{APP_NAME}.app",
-        bundle_identifier="com.eeenoooo.toggleview",
+        bundle_identifier="com.eeenoooo.toggle-widget",
         info_plist={
             "CFBundleDisplayName": APP_NAME,
             "CFBundleShortVersionString": VERSION,

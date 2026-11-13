@@ -1,0 +1,51 @@
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Check tkinter
+        run: python -c "import tkinter; print('Tk', tkinter.Tcl().eval('info patchlevel'))"
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade "pip>=26.2"
+          python -m pip install -r requirements-build.txt
+
+      - name: Build
+        run: pyinstaller --noconfirm --clean ToggleView.spec
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/ToggleView.exe -DestinationPath ToggleView-windows.zip
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil create -volname ToggleView -srcfolder dist/ToggleView.app \
+            -ov -format UDZO ToggleView-macos.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ToggleView-${{ runner.os }}
+          path: |
+            ToggleView-windows.zip
+            ToggleView-macos.dmg
+          if-no-files-found: error

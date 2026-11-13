@@ -1,0 +1,36 @@
+# Wine 上の Windows 版 Python + PyInstaller で ToggleView.exe を作るイメージ
+FROM docker.io/library/debian:trixie-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WINEDEBUG=-all \
+    WINEARCH=win64 \
+    WINEPREFIX=/opt/wine
+
+# 64bit の prefix でも syswow64 と Python インストーラ (32bit) のために wine32 が要る
+RUN dpkg --add-architecture i386 \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      wine wine64 wine32:i386 xvfb xauth x11-apps imagemagick ca-certificates curl \
+      fonts-ipafont-gothic \
+ && rm -rf /var/lib/apt/lists/*
+
+# python.org のバイナリインストーラは 3.12 系が 3.12.10 まで
+ARG PYTHON_VERSION=3.12.10
+RUN curl -fsSLo /tmp/python.exe \
+      "https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-amd64.exe" \
+ && xvfb-run -a sh -c 'wineboot --init && wineserver -w \
+      && wine /tmp/python.exe /quiet InstallAllUsers=1 TargetDir=C:\\Python \
+           Include_tcltk=1 Include_test=0 Include_doc=0 Include_launcher=0 \
+      && wineserver -w' \
+ && rm /tmp/python.exe \
+ && wine 'C:\Python\python.exe' -c "import tkinter; print('Tk', tkinter.TkVersion)"
+
+COPY requirements-build.txt /tmp/requirements-build.txt
+# インストーラ同梱の pip 25.0.1 は既知の脆弱性があるので先に上げる
+RUN wine 'C:\Python\python.exe' -m pip install --no-cache-dir --no-warn-script-location \
+      --upgrade "pip>=26.2" \
+ && wine 'C:\Python\python.exe' -m pip install --no-cache-dir --no-warn-script-location \
+      -r 'Z:\tmp\requirements-build.txt' \
+ && wineserver -w
+
+WORKDIR /src

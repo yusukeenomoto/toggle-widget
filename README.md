@@ -43,7 +43,7 @@ Python 3.10 以上 (tkinter 入り) が必要。
 |---|---|
 | `title` | ヘッダーのタイトル |
 | `skin` | 使うスキンの名前 (`skins/<名前>.json`)。`"default"` は内蔵の標準スキン |
-| `header_toggle` | true ならヘッダー右端に一括 OFF スイッチを出す。false で隠す |
+| `show_bulk_switch` | true ならヘッダー右端に一括 OFF スイッチを出す。false で隠す (v1.2.0 の `header_toggle` は起動時にこの名前へ移す) |
 | `window` | `width` 幅 / `height` 高さ (null なら中身に合わせる) / `opacity` 不透明度 (0.1 〜 1.0、1.0 で不透明。ウインドウ全体が透ける) |
 | `toggles[]` | トグルの行。上から順に並ぶ |
 | `toggles[].a` / `.b` | スイッチが false / true のときの文言 |
@@ -92,7 +92,7 @@ data.json と同じフォルダの `skins/` に置くと、フッターの「ス
 | `design.toggle` | 行のスイッチの `width` / `height` / `radius` (角丸の半径。null なら丸い形、0 なら四角) / `on_color` / `off_color` / `knob_color` / `knob_outline` (つまみの縁の色、null なら縁なし)。大きさと形はヘッダーのスイッチにも使う |
 | `design.header_toggle` | ヘッダーの一括 OFF スイッチの `on_color` / `off_color` / `knob_color` / `knob_outline` |
 | `design.textbox` | テキストボックスの `bg` / `fg` / `border` / `focus_border` |
-| `design.footer` | フッターのリンクの色 `link_fg` |
+| `design.footer` | フッターのリンクの色 `link_fg` / `align` (リンクの位置: `"left"` / `"center"` / `"right"`、標準は中央) |
 
 標準スキンの全部の値は `toggle_widget.py` の `DEFAULT_DESIGN` にある。
 

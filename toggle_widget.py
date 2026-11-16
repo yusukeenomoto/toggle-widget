@@ -2,7 +2,7 @@
 """tkinter トグルスイッチで A / B の表示を切り替えるシンプルなウィジェット (macOS / Windows 対応)
 
 - ヘッダー : タイトルと、右端にリストのスイッチを一括で false にするスイッチ
-             (data.json の header_toggle が false なら出さない)
+             (data.json の show_bulk_switch が false なら出さない)
 - その下   : トグルの行。右端にトグルスイッチ、その左に A / B のテキスト。
              textbox が true の行は、その下にテキストボックスを置く
 - フッター : data.json を開く / フォルダを表示 / スキンを選ぶ
@@ -91,7 +91,7 @@ DEFAULT_TOGGLE = {"a": "", "b": "", "value": False, "textbox": False, "text": ""
 DEFAULT_DATA = {
     "title": "Toggle Widget",
     "skin": "default",     # skins/<名前>.json の名前。"default" は内蔵の標準スキン
-    "header_toggle": True,  # false ならヘッダーの一括 OFF スイッチを出さない
+    "show_bulk_switch": True,  # false ならヘッダーの一括 OFF スイッチを出さない
     # height が null ならトグルの数に合わせて自動で決める。
     # opacity はウインドウ全体の不透明度 (0.1 〜 1.0、1.0 で不透明)
     "window": {"width": 420, "height": None, "opacity": 1.0},
@@ -140,7 +140,8 @@ DEFAULT_DESIGN = {
         "border": "#D1D1D6",
         "focus_border": "#0A84FF",
     },
-    "footer": {"link_fg": "#007AFF"},
+    # align はリンクの位置: "left" / "center" / "right"
+    "footer": {"link_fg": "#007AFF", "align": "center"},
 }
 
 # アプリの文言。{app} はアプリ名、{file} はファイル名に置き換わる
@@ -305,6 +306,21 @@ def migrate_old_design(data: dict) -> bool:
     return True
 
 
+# 名前を変えた data.json のキー (旧 → 新)。
+# header_toggle (v1.2.0) はスキンの design.header_toggle (色) と紛らわしいので改名した
+RENAMED_KEYS = {"header_toggle": "show_bulk_switch"}
+
+
+def migrate_renamed_keys(data: dict) -> bool:
+    """旧い名前のキーを新しい名前に移す。移したら True。両方あれば新しい名前を優先する。"""
+    changed = False
+    for old, new in RENAMED_KEYS.items():
+        if old in data:
+            data.setdefault(new, data.pop(old))
+            changed = True
+    return changed
+
+
 def read_data_file():
     """data.json を読む。(data, error, 旧形式から移したか) を返す。"""
     data, error = read_json(DATA_FILE, "data.json")
@@ -314,6 +330,7 @@ def read_data_file():
         return None, ("error_top", {"file": "data.json"}), False
     try:
         migrated = migrate_old_design(data)
+        migrated = migrate_renamed_keys(data) or migrated
         return normalize(data), None, migrated
     except (TypeError, AttributeError, KeyError) as e:
         return None, ("error_values", {"file": "data.json", "msg": e}), False
@@ -704,8 +721,16 @@ class ToggleSwitch(tk.Canvas):
 # --------------------------------------------------------------------------
 # アプリ本体
 # --------------------------------------------------------------------------
-# design.header.align の値と、タイトルのラベルの anchor
-HEADER_ANCHORS = {"left": "w", "center": "center", "right": "e"}
+# design.header.align / design.footer.align の値と、tkinter の anchor
+ALIGN_ANCHORS = {"left": "w", "center": "center", "right": "e"}
+
+
+def as_align(value, name: str) -> str:
+    """揃え方の設定。left / center / right でなければ、どのキーかが分かる例外にする。"""
+    if value not in ALIGN_ANCHORS:
+        raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)}"
+                         f" ({' / '.join(ALIGN_ANCHORS)})")
+    return value
 
 # data.json やスキンの値がおかしいときに画面作りで出うる例外
 BUILD_ERRORS = (tk.TclError, TypeError, ValueError, KeyError, AttributeError)
@@ -781,6 +806,7 @@ class App(tk.Tk):
         self._text_vars = []     # テキストボックスの StringVar を生かしておく
         self._fonts = []
         self._save_after_id = None
+        self._poll_after_id = None
         self._data_error = None  # これがある間は data.json を上書きしない
         self._skin_error = None  # これがある間は標準スキンで表示している
         self._skin_stamp = None
@@ -821,7 +847,7 @@ class App(tk.Tk):
             self.bind("<FocusIn>", self._on_mac_window_event, add="+")
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.after(self.POLL_MS, self._poll_files)
+        self._poll_after_id = self.after(self.POLL_MS, self._poll_files)
 
     # ---- 画面を作る ----
     def _render(self, data: dict):
@@ -896,8 +922,8 @@ class App(tk.Tk):
         link_hover_font = tkfont.Font(family=family, size=font_d["footer_size"], underline=True)
         self._fonts = [title_font, self.text_font, link_font, link_hover_font]
 
-        # ヘッダー: 左にタイトル、右端に一括 OFF スイッチ (data.json の header_toggle が true のとき)
-        show_master = as_bool(self.data["header_toggle"], "header_toggle")
+        # ヘッダー: 左にタイトル、右端に一括 OFF スイッチ (data.json の show_bulk_switch が true のとき)
+        show_master = as_bool(self.data["show_bulk_switch"], "show_bulk_switch")
         header = tk.Frame(frame, bg=header_d["bg"], padx=header_d["padding"],
                           pady=header_d["padding"] * 3 // 4)
         header.pack(fill="x")
@@ -917,10 +943,7 @@ class App(tk.Tk):
                 knob_outline=header_toggle_d["knob_outline"],
                 radius=radius,
             )
-        align = header_d["align"]
-        if align not in HEADER_ANCHORS:
-            raise ValueError(f"header.align: {json.dumps(align, ensure_ascii=False)}"
-                             f" ({' / '.join(HEADER_ANCHORS)})")
+        align = as_align(header_d["align"], "header.align")
         if self.master_switch is not None:
             # 先に右へ置き、タイトルが長くてもスイッチが押し出されないようにする
             self.master_switch.pack(side="right", padx=(header_d["padding"], 0))
@@ -930,7 +953,7 @@ class App(tk.Tk):
                      width=toggle_d["width"] + header_d["padding"]).pack(side="left")
         tk.Label(
             header, text=self.data["title"], bg=header_d["bg"], fg=header_d["fg"],
-            font=title_font, anchor=HEADER_ANCHORS[align], justify=align,
+            font=title_font, anchor=ALIGN_ANCHORS[align], justify=align,
         ).pack(side="left", fill="x", expand=True)
 
         # トグルの行を並べる白いカード
@@ -942,15 +965,20 @@ class App(tk.Tk):
             self.rows.append(self._build_row(card, item))
         self._sync_master()
 
-        # フッター: data.json を開く / フォルダを表示 / スキン
+        # フッター: data.json を開く / フォルダを表示 / スキン。
+        # 3 つを 1 つの枠にまとめ、その枠を design.footer.align の位置に置く
+        footer_align = as_align(design["footer"]["align"], "footer.align")
         footer = tk.Frame(frame, bg=win["bg"])
         footer.pack(fill="x", padx=16, pady=(0, 12))
-        for key, command in (("open_file", lambda _e: self.open_data_file()),
-                             ("show_folder", lambda _e: self.reveal_data_file()),
-                             ("skin_menu", self._popup_skin_menu)):
-            link = tk.Label(footer, text=self.text[key], font=link_font, cursor=HAND_CURSOR,
+        links = tk.Frame(footer, bg=win["bg"])
+        links.pack(anchor=ALIGN_ANCHORS[footer_align])
+        for i, (key, command) in enumerate((("open_file", lambda _e: self.open_data_file()),
+                                            ("show_folder", lambda _e: self.reveal_data_file()),
+                                            ("skin_menu", self._popup_skin_menu))):
+            link = tk.Label(links, text=self.text[key], font=link_font, cursor=HAND_CURSOR,
                             fg=design["footer"]["link_fg"], bg=win["bg"])
-            link.pack(side="left", padx=(0, 16))
+            # 間隔はリンクの間にだけ置く (端に余白があると中央・右揃えがずれる)
+            link.pack(side="left", padx=(16 if i else 0, 0))
             link.bind("<Button-1>", command)
             link.bind("<Enter>", lambda _e, w=link: w.config(font=link_hover_font))
             link.bind("<Leave>", lambda _e, w=link: w.config(font=link_font))
@@ -1169,7 +1197,7 @@ class App(tk.Tk):
 
     def _sync_master(self) -> None:
         """一括スイッチはリストのどれかが true の間だけ ON。全部 false なら OFF のまま動かない。"""
-        if self.master_switch is None:   # header_toggle が false で出していない
+        if self.master_switch is None:   # show_bulk_switch が false で出していない
             return
         any_on = any(item["value"] for item, _switch, _label in self.rows)
         self.master_switch.set(any_on, notify=False)
@@ -1200,7 +1228,7 @@ class App(tk.Tk):
         self.save()
 
     def _poll_files(self) -> None:
-        self.after(self.POLL_MS, self._poll_files)
+        self._poll_after_id = self.after(self.POLL_MS, self._poll_files)
         stamp = file_stamp()
         if stamp is not None and stamp != self._file_stamp:
             self._reload_from_file()
@@ -1265,6 +1293,14 @@ class App(tk.Tk):
     def on_close(self) -> None:
         self.save()
         self.destroy()
+
+    def destroy(self) -> None:
+        # 予約した監視と保存を取り消す (残すと、閉じた後に消えたコマンドを呼んでエラーになる)
+        for after_id in (self._poll_after_id, self._save_after_id):
+            if after_id:
+                self.after_cancel(after_id)
+        self._poll_after_id = self._save_after_id = None
+        super().destroy()
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ Python 3.10 以上 (tkinter 入り) が必要。
 
 ## data.json の編集
 
-中身 (タイトル・トグル・状態・ウインドウの大きさ) は data.json、見た目はスキン (後述) で決まる。
+中身 (タイトル・トグル・状態・ヘッダーのスイッチの有無・ウインドウの大きさと不透明度) は data.json、見た目はスキン (後述) で決まる。
 
 - 開き方: ウィジェット下の「data.json を開く」、macOS ならメニューの「設定…」(⌘,) でも開ける
   - macOS は .json に割り当てたアプリ (無ければテキストエディット)、Windows はメモ帳で開く
@@ -43,7 +43,8 @@ Python 3.10 以上 (tkinter 入り) が必要。
 |---|---|
 | `title` | ヘッダーのタイトル |
 | `skin` | 使うスキンの名前 (`skins/<名前>.json`)。`"default"` は内蔵の標準スキン |
-| `window` | `width` 幅 / `height` 高さ (null なら中身に合わせる) |
+| `header_toggle` | true ならヘッダー右端に一括 OFF スイッチを出す。false で隠す |
+| `window` | `width` 幅 / `height` 高さ (null なら中身に合わせる) / `opacity` 不透明度 (0.1 〜 1.0、1.0 で不透明。ウインドウ全体が透ける) |
 | `toggles[]` | トグルの行。上から順に並ぶ |
 | `toggles[].a` / `.b` | スイッチが false / true のときの文言 |
 | `toggles[].value` | スイッチの状態 (true / false) |

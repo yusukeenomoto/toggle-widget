@@ -2,6 +2,7 @@
 """tkinter トグルスイッチで A / B の表示を切り替えるシンプルなウィジェット (macOS / Windows 対応)
 
 - ヘッダー : タイトルと、右端にリストのスイッチを一括で false にするスイッチ
+             (data.json の header_toggle が false なら出さない)
 - その下   : トグルの行。右端にトグルスイッチ、その左に A / B のテキスト。
              textbox が true の行は、その下にテキストボックスを置く
 - フッター : data.json を開く / フォルダを表示 / スキンを選ぶ
@@ -90,13 +91,15 @@ DEFAULT_TOGGLE = {"a": "", "b": "", "value": False, "textbox": False, "text": ""
 DEFAULT_DATA = {
     "title": "Toggle Widget",
     "skin": "default",     # skins/<名前>.json の名前。"default" は内蔵の標準スキン
-    # height が null ならトグルの数に合わせて自動で決める
-    "window": {"width": 420, "height": None},
+    "header_toggle": True,  # false ならヘッダーの一括 OFF スイッチを出さない
+    # height が null ならトグルの数に合わせて自動で決める。
+    # opacity はウインドウ全体の不透明度 (0.1 〜 1.0、1.0 で不透明)
+    "window": {"width": 420, "height": None, "opacity": 1.0},
     "toggles": [
-        {"a": "A: 通知を受け取らない", "b": "B: 通知を受け取る", "value": False,
+        {"a": "A: みかん", "b": "B: りんご", "value": False,
          "textbox": True, "text": ""},
-        {"a": "A: ライトモード", "b": "B: ダークモード", "value": False},
-        {"a": "A: 自動保存しない", "b": "B: 自動保存する", "value": True},
+        {"a": "A: いぬ", "b": "B: ねこ", "value": False},
+        {"a": "A: はれ", "b": "B: あめ", "value": True},
     ],
 }
 
@@ -718,6 +721,25 @@ def as_radius(value, name: str):
     return value
 
 
+def as_bool(value, name: str) -> bool:
+    """true / false の設定。それ以外なら、どのキーかが分かる例外にする。"""
+    if not isinstance(value, bool):
+        raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)} (true / false)")
+    return value
+
+
+OPACITY_MIN = 0.1   # これより薄いとウインドウを見失うので受け付けない
+
+
+def as_opacity(value, name: str) -> float:
+    """不透明度の設定。0.1 〜 1.0 の数でなければ、どのキーかが分かる例外にする。"""
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not OPACITY_MIN <= value <= 1):
+        raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)}"
+                         f" ({OPACITY_MIN} 〜 1.0 / a number from {OPACITY_MIN} to 1.0)")
+    return float(value)
+
+
 def as_int(value, name: str) -> int:
     """数値の設定を int にする。できなければ、どのキーかが分かる例外にする。"""
     if isinstance(value, bool):
@@ -831,6 +853,7 @@ class App(tk.Tk):
             win = design["window"]
             width = as_int(win["width"], "window.width")
             height = None if win["height"] is None else as_int(win["height"], "window.height")
+            opacity = as_opacity(data["window"]["opacity"], "window.opacity")
             self._build_content(frame)
         except BUILD_ERRORS as e:
             frame.destroy()
@@ -844,6 +867,12 @@ class App(tk.Tk):
         self.content = frame
         frame.pack(fill="both", expand=True)
         self._width_setting, self._height_setting = width, height
+        try:
+            # ウインドウ全体 (中の文字やスイッチも含む) が透ける。
+            # Linux ではコンポジタが無いと効かないことがある
+            self.attributes("-alpha", opacity)
+        except tk.TclError:
+            pass
         # タイトルはヘッダーに出すので、タイトルバーには出さない。
         # macOS は名前を残して描画だけ止める (_on_mac_window_event)。
         # Windows はタイトルバーの文字だけを消す標準の手段が無いので空にする
@@ -867,31 +896,35 @@ class App(tk.Tk):
         link_hover_font = tkfont.Font(family=family, size=font_d["footer_size"], underline=True)
         self._fonts = [title_font, self.text_font, link_font, link_hover_font]
 
-        # ヘッダー: 左にタイトル、右端に一括 OFF スイッチ
+        # ヘッダー: 左にタイトル、右端に一括 OFF スイッチ (data.json の header_toggle が true のとき)
+        show_master = as_bool(self.data["header_toggle"], "header_toggle")
         header = tk.Frame(frame, bg=header_d["bg"], padx=header_d["padding"],
                           pady=header_d["padding"] * 3 // 4)
         header.pack(fill="x")
-        self.master_switch = ToggleSwitch(
-            header,
-            # 起動時にスライドして見えないよう、最初から状態を合わせておく
-            value=any(t["value"] for t in self.data["toggles"]),
-            command=self.on_master_toggle,
-            bg=header_d["bg"],
-            width=toggle_d["width"],
-            height=toggle_d["height"],
-            on_color=header_toggle_d["on_color"],
-            off_color=header_toggle_d["off_color"],
-            knob_color=header_toggle_d["knob_color"],
-            knob_outline=header_toggle_d["knob_outline"],
-            radius=radius,
-        )
+        self.master_switch = None
+        if show_master:
+            self.master_switch = ToggleSwitch(
+                header,
+                # 起動時にスライドして見えないよう、最初から状態を合わせておく
+                value=any(t["value"] for t in self.data["toggles"]),
+                command=self.on_master_toggle,
+                bg=header_d["bg"],
+                width=toggle_d["width"],
+                height=toggle_d["height"],
+                on_color=header_toggle_d["on_color"],
+                off_color=header_toggle_d["off_color"],
+                knob_color=header_toggle_d["knob_color"],
+                knob_outline=header_toggle_d["knob_outline"],
+                radius=radius,
+            )
         align = header_d["align"]
         if align not in HEADER_ANCHORS:
             raise ValueError(f"header.align: {json.dumps(align, ensure_ascii=False)}"
                              f" ({' / '.join(HEADER_ANCHORS)})")
-        # 先に右へ置き、タイトルが長くてもスイッチが押し出されないようにする
-        self.master_switch.pack(side="right", padx=(header_d["padding"], 0))
-        if align == "center":
+        if self.master_switch is not None:
+            # 先に右へ置き、タイトルが長くてもスイッチが押し出されないようにする
+            self.master_switch.pack(side="right", padx=(header_d["padding"], 0))
+        if align == "center" and self.master_switch is not None:
             # スイッチと同じ幅の見えない余白を左に置き、ヘッダー全体の中央にそろえる
             tk.Frame(header, bg=header_d["bg"], height=1,
                      width=toggle_d["width"] + header_d["padding"]).pack(side="left")
@@ -1136,6 +1169,8 @@ class App(tk.Tk):
 
     def _sync_master(self) -> None:
         """一括スイッチはリストのどれかが true の間だけ ON。全部 false なら OFF のまま動かない。"""
+        if self.master_switch is None:   # header_toggle が false で出していない
+            return
         any_on = any(item["value"] for item, _switch, _label in self.rows)
         self.master_switch.set(any_on, notify=False)
         self.master_switch.set_enabled(any_on)

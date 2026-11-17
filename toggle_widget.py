@@ -114,8 +114,8 @@ DEFAULT_DESIGN = {
     "font": {"family": None, "title_size": 16, "text_size": 13, "footer_size": 11},
     # align はタイトルの位置: "left" / "center" / "right"
     "header": {"bg": "#2C2C2E", "fg": "#FFFFFF", "padding": 16, "align": "left"},
-    # fg_off はトグルが false (A を表示) のときの文字色。null なら fg と同じ
-    "row": {"bg": "#FFFFFF", "fg": "#1C1C1E", "fg_off": None,
+    # bg_off / fg_off はトグルが false (A を表示) のときの背景色と文字色。null なら bg / fg と同じ
+    "row": {"bg": "#FFFFFF", "fg": "#1C1C1E", "bg_off": None, "fg_off": None,
             "padding": 12, "separator": "#D1D1D6"},
     # width / height / radius はヘッダーの一括 OFF スイッチにも使う
     "toggle": {
@@ -910,6 +910,11 @@ class App(tk.Tk):
         win, header_d, row_d = design["window"], design["header"], design["row"]
         toggle_d, header_toggle_d = design["toggle"], design["header_toggle"]
         font_d = design["font"]
+        # false のときの色はクリックするまで使われないので、ここで先に確かめる
+        # (間違っていれば、クリックした時ではなく読み込んだ時にエラーとして出す)
+        for key in ("bg_off", "fg_off"):
+            if row_d[key] is not None:
+                self.winfo_rgb(row_d[key])
         radius = as_radius(toggle_d["radius"], "toggle.radius")
 
         self.configure(bg=win["bg"])
@@ -1001,7 +1006,7 @@ class App(tk.Tk):
 
         def on_toggle(value: bool) -> None:
             item["value"] = value
-            self.update_row(label, item)
+            self.update_row(item, switch, label)
             self._sync_master()
             self.save()
 
@@ -1031,7 +1036,7 @@ class App(tk.Tk):
 
         label.config(wraplength=wrap_for(as_int(self.design["window"]["width"], "window.width") - 32))
         row.bind("<Configure>", lambda e: label.config(wraplength=wrap_for(e.width)))
-        self.update_row(label, item)
+        self.update_row(item, switch, label)
         return item, switch, label
 
     def _build_textbox(self, master, item: dict) -> tk.Frame:
@@ -1188,12 +1193,17 @@ class App(tk.Tk):
             widget.event_generate(virtual_event)
 
     # ---- 表示更新 ----
-    def update_row(self, label: tk.Label, item: dict) -> None:
+    def update_row(self, item: dict, switch: "ToggleSwitch", label: tk.Label) -> None:
+        """true なら B、false なら A を出し、行の色を切り替える。
+        スイッチの下地 (Canvas の背景) も行と同じ色にしないと、四角く浮いて見える。"""
         row_d = self.design["row"]
         if item["value"]:
-            label.config(text=item["b"], fg=row_d["fg"])
+            text, bg, fg = item["b"], row_d["bg"], row_d["fg"]
         else:
-            label.config(text=item["a"], fg=row_d["fg_off"] or row_d["fg"])
+            text, bg, fg = item["a"], row_d["bg_off"] or row_d["bg"], row_d["fg_off"] or row_d["fg"]
+        label.config(text=text, fg=fg, bg=bg)
+        label.master.config(bg=bg)
+        switch.config(bg=bg)
 
     def _sync_master(self) -> None:
         """一括スイッチはリストのどれかが true の間だけ ON。全部 false なら OFF のまま動かない。"""
@@ -1286,7 +1296,7 @@ class App(tk.Tk):
         for item, switch, label in self.rows:
             item["value"] = False
             switch.set(False, notify=False)
-            self.update_row(label, item)
+            self.update_row(item, switch, label)
         self._sync_master()
         self.save()
 

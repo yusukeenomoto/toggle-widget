@@ -8,7 +8,7 @@
 import sys
 
 APP_NAME = "toggle-widget"
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 IS_MAC = sys.platform == "darwin"
 
 a = Analysis(

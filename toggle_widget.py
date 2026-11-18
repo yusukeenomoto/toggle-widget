@@ -4,6 +4,7 @@
 - ヘッダー : タイトルと、右端にリストのスイッチを一括で false にするスイッチ
              (data.json の show_bulk_switch が false なら出さない)
 - その下   : トグルの行。右端にトグルスイッチ、その左に A / B のテキスト。
+             timestamp が true の行は、テキストの下に最後に切り替えた日時 (JST) を出す。
              textbox が true の行は、その下にテキストボックスを置く
 - フッター : data.json を開く / フォルダを表示 / スキンを選ぶ
 - タイトルはヘッダーに出すので、ウインドウのタイトルバーには出さない
@@ -24,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tkinter as tk
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tkinter import font as tkfont
 
@@ -85,8 +87,11 @@ def prepare_skins_dir() -> None:
 
 
 # toggles の 1 件分。value が false なら a、true なら b を表示する。
-# textbox が true なら行の下にテキストボックスを置き、入力内容を text に保存する
-DEFAULT_TOGGLE = {"a": "", "b": "", "value": False, "textbox": False, "text": ""}
+# textbox が true なら行の下にテキストボックスを置き、入力内容を text に保存する。
+# timestamp が true なら、最後にスイッチを切り替えた日時 (updated_at) をテキストの下に出す。
+# updated_at が null なら読み込んだ時刻 (起動時なら起動した時刻) を入れる
+DEFAULT_TOGGLE = {"a": "", "b": "", "value": False, "textbox": False, "text": "",
+                  "timestamp": False, "updated_at": None}
 
 DEFAULT_DATA = {
     "title": "Toggle Widget",
@@ -98,7 +103,7 @@ DEFAULT_DATA = {
     "toggles": [
         {"a": "A: みかん", "b": "B: りんご", "value": False,
          "textbox": True, "text": ""},
-        {"a": "A: いぬ", "b": "B: ねこ", "value": False},
+        {"a": "A: いぬ", "b": "B: ねこ", "value": False, "timestamp": True},
         {"a": "A: はれ", "b": "B: あめ", "value": True},
     ],
 }
@@ -111,12 +116,14 @@ SKIN_FORMAT = 1   # スキンファイルの形式。キーの形を変えると
 DEFAULT_DESIGN = {
     "window": {"bg": "#F2F2F7"},
     # family が null なら OS の標準フォント
-    "font": {"family": None, "title_size": 16, "text_size": 13, "footer_size": 11},
+    "font": {"family": None, "title_size": 16, "text_size": 13, "footer_size": 11,
+             "timestamp_size": 11},
     # align はタイトルの位置: "left" / "center" / "right"
     "header": {"bg": "#2C2C2E", "fg": "#FFFFFF", "padding": 16, "align": "left"},
-    # bg_off / fg_off はトグルが false (A を表示) のときの背景色と文字色。null なら bg / fg と同じ
+    # bg_off / fg_off はトグルが false (A を表示) のときの背景色と文字色。null なら bg / fg と同じ。
+    # timestamp_fg はタイムスタンプの文字色。null なら行の文字色と同じ
     "row": {"bg": "#FFFFFF", "fg": "#1C1C1E", "bg_off": None, "fg_off": None,
-            "padding": 12, "separator": "#D1D1D6"},
+            "timestamp_fg": "#8E8E93", "padding": 12, "separator": "#D1D1D6"},
     # width / height / radius はヘッダーの一括 OFF スイッチにも使う
     "toggle": {
         "width": 52,
@@ -184,6 +191,37 @@ UI_TEXT = {
 
 
 # --------------------------------------------------------------------------
+# タイムスタンプ (JST)
+# --------------------------------------------------------------------------
+# 日本は夏時間が無いので固定の +09:00 でよい (zoneinfo は Windows だと tzdata が要る)
+JST = timezone(timedelta(hours=9), "JST")
+TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S JST"
+
+
+def now_jst() -> str:
+    """data.json の updated_at に入れる今の時刻 (例: 2026-11-18T09:30:00+09:00)。"""
+    return datetime.now(JST).isoformat(timespec="seconds")
+
+
+def format_jst(value, name: str) -> str:
+    """updated_at を JST の表示用の文字列にする。読めなければ、どのキーかが分かる例外にする。
+
+    時差の無い値は JST として扱い、ほかの時差の値は JST に直して出す。
+    """
+    try:
+        # Python 3.10 の fromisoformat は末尾の Z (UTC) を読めないので +00:00 に直す
+        if isinstance(value, str) and value.endswith(("Z", "z")):
+            value = value[:-1] + "+00:00"
+        dt = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)}"
+                         ' (例 / e.g. "2026-11-18T09:30:00+09:00")') from None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=JST)
+    return dt.astimezone(JST).strftime(TIMESTAMP_FORMAT)
+
+
+# --------------------------------------------------------------------------
 # JSON の読み書き
 # --------------------------------------------------------------------------
 def merge_defaults(data: dict, defaults: dict) -> dict:
@@ -216,6 +254,11 @@ def normalize(data: dict) -> dict:
     data["toggles"] = [
         merge_defaults(t, DEFAULT_TOGGLE) for t in data["toggles"] if isinstance(t, dict)
     ]
+    # まだ切り替えたことの無い行は、読み込んだ時刻を最初の値にする
+    now = now_jst()
+    for t in data["toggles"]:
+        if t["updated_at"] in (None, ""):
+            t["updated_at"] = now
     return data
 
 
@@ -801,7 +844,7 @@ class App(tk.Tk):
         self.data = None
         self.design = None       # 標準スキン + 選んだスキン + ウインドウの大きさ
         self.content = None      # ヘッダー・カード・フッターをまとめた Frame。読み直すと作り直す
-        self.rows = []           # (item, スイッチ, ラベル)
+        self.rows = []           # (item, スイッチ, ラベル, タイムスタンプ or None)
         self.master_switch = None
         self._text_vars = []     # テキストボックスの StringVar を生かしておく
         self._fonts = []
@@ -912,7 +955,7 @@ class App(tk.Tk):
         font_d = design["font"]
         # false のときの色はクリックするまで使われないので、ここで先に確かめる
         # (間違っていれば、クリックした時ではなく読み込んだ時にエラーとして出す)
-        for key in ("bg_off", "fg_off"):
+        for key in ("bg_off", "fg_off", "timestamp_fg"):
             if row_d[key] is not None:
                 self.winfo_rgb(row_d[key])
         radius = as_radius(toggle_d["radius"], "toggle.radius")
@@ -925,7 +968,8 @@ class App(tk.Tk):
         self.text_font = tkfont.Font(family=family, size=font_d["text_size"])
         link_font = tkfont.Font(family=family, size=font_d["footer_size"])
         link_hover_font = tkfont.Font(family=family, size=font_d["footer_size"], underline=True)
-        self._fonts = [title_font, self.text_font, link_font, link_hover_font]
+        self.timestamp_font = tkfont.Font(family=family, size=font_d["timestamp_size"])
+        self._fonts = [title_font, self.text_font, link_font, link_hover_font, self.timestamp_font]
 
         # ヘッダー: 左にタイトル、右端に一括 OFF スイッチ (data.json の show_bulk_switch が true のとき)
         show_master = as_bool(self.data["show_bulk_switch"], "show_bulk_switch")
@@ -967,7 +1011,7 @@ class App(tk.Tk):
         for i, item in enumerate(self.data["toggles"]):
             if i:
                 tk.Frame(card, bg=row_d["separator"], height=1).pack(fill="x")
-            self.rows.append(self._build_row(card, item))
+            self.rows.append(self._build_row(card, item, i))
         self._sync_master()
 
         # フッター: data.json を開く / フォルダを表示 / スキン。
@@ -988,8 +1032,9 @@ class App(tk.Tk):
             link.bind("<Enter>", lambda _e, w=link: w.config(font=link_hover_font))
             link.bind("<Leave>", lambda _e, w=link: w.config(font=link_font))
 
-    def _build_row(self, master, item: dict) -> tuple:
-        """右端にトグル、その左に A / B のテキスト、必要ならその下にテキストボックス。"""
+    def _build_row(self, master, item: dict, index: int) -> tuple:
+        """右端にトグル、その左に A / B のテキスト。
+        必要ならテキストの下にタイムスタンプ、その下にテキストボックス。"""
         row_d = self.design["row"]
         toggle_d = self.design["toggle"]
         pad = row_d["padding"]
@@ -1004,9 +1049,18 @@ class App(tk.Tk):
         )
         label.grid(row=0, column=0, sticky="we", padx=(0, pad))
 
+        # タイムスタンプ: スイッチを切り替えたときだけ更新する
+        stamp = None
+        if as_bool(item["timestamp"], f"toggles[{index}].timestamp"):
+            format_jst(item["updated_at"], f"toggles[{index}].updated_at")  # 読めるか先に確かめる
+            stamp = tk.Label(row, bg=row_d["bg"], font=self.timestamp_font,
+                             anchor="w", justify="left")
+            stamp.grid(row=1, column=0, sticky="we", padx=(0, pad), pady=(2, 0))
+
         def on_toggle(value: bool) -> None:
             item["value"] = value
-            self.update_row(item, switch, label)
+            item["updated_at"] = now_jst()
+            self.update_row(item, switch, label, stamp)
             self._sync_master()
             self.save()
 
@@ -1023,11 +1077,12 @@ class App(tk.Tk):
             knob_outline=toggle_d["knob_outline"],
             radius=as_radius(toggle_d["radius"], "toggle.radius"),
         )
-        switch.grid(row=0, column=1, sticky="e")
+        # タイムスタンプがあるときは、テキストとタイムスタンプの 2 段の真ん中に置く
+        switch.grid(row=0, column=1, rowspan=2 if stamp else 1, sticky="e")
 
         if item["textbox"]:
             self._build_textbox(row, item).grid(
-                row=1, column=0, columnspan=2, sticky="we", pady=(pad * 2 // 3, 0))
+                row=2, column=0, columnspan=2, sticky="we", pady=(pad * 2 // 3, 0))
 
         # 行の幅に合わせてテキストを折り返す。高さの自動計算に間に合うよう、
         # 最初は設定上のウィンドウ幅 (カードの左右余白 16 を引く) から求めておく
@@ -1036,8 +1091,8 @@ class App(tk.Tk):
 
         label.config(wraplength=wrap_for(as_int(self.design["window"]["width"], "window.width") - 32))
         row.bind("<Configure>", lambda e: label.config(wraplength=wrap_for(e.width)))
-        self.update_row(item, switch, label)
-        return item, switch, label
+        self.update_row(item, switch, label, stamp)
+        return item, switch, label, stamp
 
     def _build_textbox(self, master, item: dict) -> tk.Frame:
         """1 行のテキストボックス。入力内容は item["text"] に入れて保存する。"""
@@ -1193,8 +1248,9 @@ class App(tk.Tk):
             widget.event_generate(virtual_event)
 
     # ---- 表示更新 ----
-    def update_row(self, item: dict, switch: "ToggleSwitch", label: tk.Label) -> None:
-        """true なら B、false なら A を出し、行の色を切り替える。
+    def update_row(self, item: dict, switch: "ToggleSwitch", label: tk.Label,
+                   stamp=None) -> None:
+        """true なら B、false なら A を出し、行の色を切り替える。タイムスタンプも出し直す。
         スイッチの下地 (Canvas の背景) も行と同じ色にしないと、四角く浮いて見える。"""
         row_d = self.design["row"]
         if item["value"]:
@@ -1204,12 +1260,15 @@ class App(tk.Tk):
         label.config(text=text, fg=fg, bg=bg)
         label.master.config(bg=bg)
         switch.config(bg=bg)
+        if stamp is not None:
+            stamp.config(text=format_jst(item["updated_at"], "updated_at"),
+                         fg=row_d["timestamp_fg"] or fg, bg=bg)
 
     def _sync_master(self) -> None:
         """一括スイッチはリストのどれかが true の間だけ ON。全部 false なら OFF のまま動かない。"""
         if self.master_switch is None:   # show_bulk_switch が false で出していない
             return
-        any_on = any(item["value"] for item, _switch, _label in self.rows)
+        any_on = any(item["value"] for item, *_widgets in self.rows)
         self.master_switch.set(any_on, notify=False)
         self.master_switch.set_enabled(any_on)
 
@@ -1293,10 +1352,13 @@ class App(tk.Tk):
         if value:
             self._sync_master()
             return
-        for item, switch, label in self.rows:
-            item["value"] = False
+        now = now_jst()
+        for item, switch, label, stamp in self.rows:
+            if item["value"]:   # 実際に切り替わった行だけタイムスタンプを更新する
+                item["value"] = False
+                item["updated_at"] = now
             switch.set(False, notify=False)
-            self.update_row(item, switch, label)
+            self.update_row(item, switch, label, stamp)
         self._sync_master()
         self.save()
 

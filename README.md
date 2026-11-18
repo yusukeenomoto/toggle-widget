@@ -50,6 +50,8 @@ Python 3.10 以上 (tkinter 入り) が必要。
 | `toggles[].value` | スイッチの状態 (true / false) |
 | `toggles[].textbox` | true なら行の下にテキストボックスを出す |
 | `toggles[].text` | テキストボックスの内容 |
+| `toggles[].timestamp` | true ならテキストの下に、最後にスイッチを切り替えた日時 (JST) を出す |
+| `toggles[].updated_at` | 最後にスイッチを切り替えた日時 (例 `"2026-11-18T09:30:00+09:00"`)。スイッチを切り替えたとき (一括 OFF で切り替わったときも) だけ更新される。null なら読み込んだ時刻 (起動時なら起動した時刻) が入る。時差の無い値は JST として扱う |
 
 足りないキーは既定値で補われる。
 
@@ -86,9 +88,9 @@ data.json と同じフォルダの `skins/` に置くと、フッターの「ス
 | キー | 内容 |
 |---|---|
 | `design.window` | 背景色 `bg` |
-| `design.font` | `family` (null なら OS 標準) / `title_size` / `text_size` / `footer_size` |
+| `design.font` | `family` (null なら OS 標準) / `title_size` / `text_size` / `footer_size` / `timestamp_size` |
 | `design.header` | ヘッダーの `bg` / `fg` / `padding` / `align` (タイトルの位置: `"left"` / `"center"` / `"right"`) |
-| `design.row` | 行の `bg` / `fg` / `bg_off` / `fg_off` (false のときの背景色と文字色、null なら bg / fg と同じ) / `padding` / `separator` |
+| `design.row` | 行の `bg` / `fg` / `bg_off` / `fg_off` (false のときの背景色と文字色、null なら bg / fg と同じ) / `timestamp_fg` (タイムスタンプの文字色、null なら行の文字色と同じ) / `padding` / `separator` |
 | `design.toggle` | 行のスイッチの `width` / `height` / `radius` (角丸の半径。null なら丸い形、0 なら四角) / `on_color` / `off_color` / `knob_color` / `knob_outline` (つまみの縁の色、null なら縁なし)。大きさと形はヘッダーのスイッチにも使う |
 | `design.header_toggle` | ヘッダーの一括 OFF スイッチの `on_color` / `off_color` / `knob_color` / `knob_outline` |
 | `design.textbox` | テキストボックスの `bg` / `fg` / `border` / `focus_border` |

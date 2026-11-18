@@ -43,7 +43,7 @@ Python 3.10 以上 (tkinter 入り) が必要。
 |---|---|
 | `title` | ヘッダーのタイトル |
 | `skin` | 使うスキンの名前 (`skins/<名前>.json`)。`"default"` は内蔵の標準スキン |
-| `show_bulk_switch` | true ならヘッダー右端に一括 OFF スイッチを出す。false で隠す (v1.2.0 の `header_toggle` は起動時にこの名前へ移す) |
+| `show_bulk_switch` | true ならヘッダー右端に一括 OFF スイッチを出す。false で隠す |
 | `window` | `width` 幅 / `height` 高さ (null なら中身に合わせる) / `opacity` 不透明度 (0.1 〜 1.0、1.0 で不透明。ウインドウ全体が透ける) |
 | `toggles[]` | トグルの行。上から順に並ぶ |
 | `toggles[].a` / `.b` | スイッチが false / true のときの文言 |
@@ -54,9 +54,6 @@ Python 3.10 以上 (tkinter 入り) が必要。
 | `toggles[].updated_at` | 最後にスイッチを切り替えた日時 (例 `"2026-11-18T09:30:00+09:00"`)。スイッチを切り替えたとき (一括 OFF で切り替わったときも) だけ更新される。null なら読み込んだ時刻 (起動時なら起動した時刻) が入る。時差の無い値は JST として扱う |
 
 足りないキーは既定値で補われる。
-
-以前の版の data.json (中に `design` があるもの) は、新しい版で初めて起動したときに自動で移す。
-見た目を変えていなければ標準スキンに、変えていれば `skins/my-skin.json` を作ってそれを使う。
 
 ## スキン
 
@@ -85,16 +82,30 @@ data.json と同じフォルダの `skins/` に置くと、フッターの「ス
 - 読めない・値がおかしいスキンは赤い帯で知らせ、標準のスキンで表示する。アプリはスキンファイルに書き込まない
 - スキンは JSON なので、他の人が作ったものを入れてもプログラムは実行されない
 
+### 色のキーの読み方
+
+色のキーは tkinter の書き方にそろえて、次の略し方をしている。
+
+| 名前に入っている語 | 意味 |
+|---|---|
+| `bg` | 背景色 (background の略) |
+| `fg` | 文字色 (foreground の略) |
+| `_off` | スイッチが OFF (false) の行で使う色。`bg_off` なら OFF の行の背景色 |
+
+色は `"#RRGGBB"` (例 `"#FF3B30"`) で書く。`"red"` のような色の名前も使える。
+
+### キーの一覧
+
 | キー | 内容 |
 |---|---|
-| `design.window` | 背景色 `bg` |
-| `design.font` | `family` (null なら OS 標準) / `title_size` / `text_size` / `footer_size` / `timestamp_size` |
-| `design.header` | ヘッダーの `bg` / `fg` / `padding` / `align` (タイトルの位置: `"left"` / `"center"` / `"right"`) |
-| `design.row` | 行の `bg` / `fg` / `bg_off` / `fg_off` (false のときの背景色と文字色、null なら bg / fg と同じ) / `timestamp_fg` (タイムスタンプの文字色、null なら行の文字色と同じ) / `padding` / `separator` |
-| `design.toggle` | 行のスイッチの `width` / `height` / `radius` (角丸の半径。null なら丸い形、0 なら四角) / `on_color` / `off_color` / `knob_color` / `knob_outline` (つまみの縁の色、null なら縁なし)。大きさと形はヘッダーのスイッチにも使う |
-| `design.header_toggle` | ヘッダーの一括 OFF スイッチの `on_color` / `off_color` / `knob_color` / `knob_outline` |
-| `design.textbox` | テキストボックスの `bg` / `fg` / `border` / `focus_border` |
-| `design.footer` | フッターのリンクの色 `link_fg` / `align` (リンクの位置: `"left"` / `"center"` / `"right"`、標準は中央) |
+| `design.window` | `bg` ウインドウの背景色 |
+| `design.font` | `family` 書体 (null なら OS 標準) / 文字の大きさ: `title_size` タイトル、`text_size` 行のテキスト、`footer_size` フッターのリンク、`timestamp_size` タイムスタンプ |
+| `design.header` | `bg` ヘッダーの背景色 / `fg` タイトルの文字色 / `padding` 余白 / `align` タイトルの位置 (`"left"` / `"center"` / `"right"`) |
+| `design.row` | `bg` 行の背景色 / `fg` 行の文字色 / `bg_off`・`fg_off` OFF の行の背景色・文字色 (null なら `bg`・`fg` と同じ) / `timestamp_fg` タイムスタンプの文字色 (null なら行の文字色と同じ) / `padding` 余白 / `separator` 行の間の区切り線の色 |
+| `design.toggle` | 行のスイッチ。`width` 幅 / `height` 高さ / `radius` 角丸の半径 (null なら丸い形、0 なら四角) / `on_color` ON のときの色 / `off_color` OFF のときの色 / `knob_color` つまみの色 / `knob_outline` つまみの縁の色 (null なら縁なし)。大きさと形はヘッダーのスイッチにも使う |
+| `design.header_toggle` | ヘッダーの一括 OFF スイッチの色。`on_color` / `off_color` / `knob_color` / `knob_outline` (意味は `design.toggle` と同じ) |
+| `design.textbox` | `bg` テキストボックスの背景色 / `fg` 文字色 / `border` 枠線の色 / `focus_border` 入力中の枠線の色 |
+| `design.footer` | `link_fg` リンクの文字色 / `align` リンクの位置 (`"left"` / `"center"` / `"right"`、標準は中央) |
 
 標準スキンの全部の値は `toggle_widget.py` の `DEFAULT_DESIGN` にある。
 

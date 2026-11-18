@@ -314,69 +314,17 @@ def file_stamp():
     return stamp_of(DATA_FILE)
 
 
-def migrate_old_design(data: dict) -> bool:
-    """旧形式 (data.json に design を持つ) を新形式に移す。移したら True。
-
-    見た目を変えていなければ標準スキンに、変えていれば skins/my-skin.json に移す。
-    """
-    if "design" not in data:
-        return False
-    design = data.pop("design")
-    if not isinstance(design, dict):
-        return True
-    window = design.get("window") if isinstance(design.get("window"), dict) else {}
-    if not isinstance(data.get("window"), dict):
-        data["window"] = {"width": window.get("width", 420), "height": window.get("height")}
-    skin_design = copy.deepcopy(design)
-    if isinstance(skin_design.get("window"), dict):
-        skin_design["window"].pop("width", None)
-        skin_design["window"].pop("height", None)
-
-    if merge_defaults(copy.deepcopy(skin_design), DEFAULT_DESIGN) == DEFAULT_DESIGN:
-        data.setdefault("skin", DEFAULT_SKIN)
-        return True
-    folder = skins_dir()
-    name, n = "my-skin", 1
-    while (folder / f"{name}.json").exists():
-        n += 1
-        name = f"my-skin-{n}"
-    try:
-        folder.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        pass
-    skin = {"format": SKIN_FORMAT, "name": "My Skin", "design": skin_design}
-    data["skin"] = name if write_json(folder / f"{name}.json", skin) else DEFAULT_SKIN
-    return True
-
-
-# 名前を変えた data.json のキー (旧 → 新)。
-# header_toggle (v1.2.0) はスキンの design.header_toggle (色) と紛らわしいので改名した
-RENAMED_KEYS = {"header_toggle": "show_bulk_switch"}
-
-
-def migrate_renamed_keys(data: dict) -> bool:
-    """旧い名前のキーを新しい名前に移す。移したら True。両方あれば新しい名前を優先する。"""
-    changed = False
-    for old, new in RENAMED_KEYS.items():
-        if old in data:
-            data.setdefault(new, data.pop(old))
-            changed = True
-    return changed
-
-
 def read_data_file():
-    """data.json を読む。(data, error, 旧形式から移したか) を返す。"""
+    """data.json を読む。(data, error) を返す。"""
     data, error = read_json(DATA_FILE, "data.json")
     if error or data is None:
-        return None, error, False
+        return None, error
     if not isinstance(data, dict):
-        return None, ("error_top", {"file": "data.json"}), False
+        return None, ("error_top", {"file": "data.json"})
     try:
-        migrated = migrate_old_design(data)
-        migrated = migrate_renamed_keys(data) or migrated
-        return normalize(data), None, migrated
+        return normalize(data), None
     except (TypeError, AttributeError, KeyError) as e:
-        return None, ("error_values", {"file": "data.json", "msg": e}), False
+        return None, ("error_values", {"file": "data.json", "msg": e})
 
 
 # ---- スキンファイル ----
@@ -452,44 +400,39 @@ def make_design(skin_design: dict, data: dict) -> dict:
 
 
 # ---- 外部アプリで開く ----
-def open_in_editor(path: Path) -> None:
-    """テキストエディタで開く。"""
+def run_command(args) -> bool:
+    """外部コマンドを起動する。macOS の open はすぐ終わるので、終わるのを待って成否を返す。"""
     try:
         if IS_MAC:
-            # .json に割り当てたアプリで開く。割り当てが無ければテキストエディット
-            if subprocess.run(["open", str(path)], capture_output=True).returncode != 0:
-                subprocess.run(["open", "-t", str(path)], capture_output=True)
-        elif IS_WIN:
-            subprocess.Popen(["notepad.exe", str(path)])
-        else:
-            subprocess.Popen(["xdg-open", str(path)])
+            return subprocess.run(args, capture_output=True).returncode == 0
+        subprocess.Popen(args)
+        return True
     except OSError as e:
         print(f"開けませんでした: {e}")
+        return False
+
+
+def open_in_editor(path: Path) -> None:
+    """テキストエディタで開く。"""
+    if IS_MAC:
+        # .json に割り当てたアプリで開く。割り当てが無ければテキストエディット
+        run_command(["open", str(path)]) or run_command(["open", "-t", str(path)])
+    else:
+        run_command(["notepad.exe" if IS_WIN else "xdg-open", str(path)])
 
 
 def reveal_in_folder(path: Path) -> None:
     """Finder / エクスプローラーでファイルを選んだ状態で表示する。"""
-    try:
-        if IS_MAC:
-            subprocess.run(["open", "-R", str(path)], capture_output=True)
-        elif IS_WIN:
-            subprocess.Popen(f'explorer /select,"{path}"')
-        else:
-            subprocess.Popen(["xdg-open", str(path.parent)])
-    except OSError as e:
-        print(f"開けませんでした: {e}")
+    if IS_MAC:
+        run_command(["open", "-R", str(path)])
+    elif IS_WIN:
+        run_command(f'explorer /select,"{path}"')
+    else:
+        run_command(["xdg-open", str(path.parent)])
 
 
 def open_folder(path: Path) -> None:
-    try:
-        if IS_MAC:
-            subprocess.run(["open", str(path)], capture_output=True)
-        elif IS_WIN:
-            subprocess.Popen(["explorer", str(path)])
-        else:
-            subprocess.Popen(["xdg-open", str(path)])
-    except OSError as e:
-        print(f"開けませんでした: {e}")
+    run_command(["open" if IS_MAC else "explorer" if IS_WIN else "xdg-open", str(path)])
 
 
 # --------------------------------------------------------------------------
@@ -766,56 +709,154 @@ class ToggleSwitch(tk.Canvas):
 # --------------------------------------------------------------------------
 # design.header.align / design.footer.align の値と、tkinter の anchor
 ALIGN_ANCHORS = {"left": "w", "center": "center", "right": "e"}
-
-
-def as_align(value, name: str) -> str:
-    """揃え方の設定。left / center / right でなければ、どのキーかが分かる例外にする。"""
-    if value not in ALIGN_ANCHORS:
-        raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)}"
-                         f" ({' / '.join(ALIGN_ANCHORS)})")
-    return value
+OPACITY_MIN = 0.1   # これより薄いとウインドウを見失うので受け付けない
 
 # data.json やスキンの値がおかしいときに画面作りで出うる例外
 BUILD_ERRORS = (tk.TclError, TypeError, ValueError, KeyError, AttributeError)
 
 
-def as_radius(value, name: str):
-    """角丸の半径の設定。null か 0 以上の数でなければ、どのキーかが分かる例外にする。"""
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+def check(value, name: str, ok: bool, hint: str = ""):
+    """設定の値を確かめて返す。ok でなければ、どのキーのどの値かが分かる例外にする。"""
+    if not ok:
         raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)}"
-                         " (null か 0 以上の数 / null or a number >= 0)")
+                         + (f" ({hint})" if hint else ""))
     return value
+
+
+def is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def as_bool(value, name: str) -> bool:
-    """true / false の設定。それ以外なら、どのキーかが分かる例外にする。"""
-    if not isinstance(value, bool):
-        raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)} (true / false)")
-    return value
+    return check(value, name, isinstance(value, bool), "true / false")
 
 
-OPACITY_MIN = 0.1   # これより薄いとウインドウを見失うので受け付けない
+def as_align(value, name: str) -> str:
+    return check(value, name, isinstance(value, str) and value in ALIGN_ANCHORS,
+                 " / ".join(ALIGN_ANCHORS))
+
+
+def as_radius(value, name: str):
+    return check(value, name, value is None or (is_number(value) and value >= 0),
+                 "null か 0 以上の数 / null or a number >= 0")
 
 
 def as_opacity(value, name: str) -> float:
-    """不透明度の設定。0.1 〜 1.0 の数でなければ、どのキーかが分かる例外にする。"""
-    if (isinstance(value, bool) or not isinstance(value, (int, float))
-            or not OPACITY_MIN <= value <= 1):
-        raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)}"
-                         f" ({OPACITY_MIN} 〜 1.0 / a number from {OPACITY_MIN} to 1.0)")
-    return float(value)
+    return float(check(value, name, is_number(value) and OPACITY_MIN <= value <= 1,
+                       f"{OPACITY_MIN} 〜 1.0 / a number from {OPACITY_MIN} to 1.0"))
 
 
 def as_int(value, name: str) -> int:
-    """数値の設定を int にする。できなければ、どのキーかが分かる例外にする。"""
-    if isinstance(value, bool):
-        raise ValueError(f"{name}: {json.dumps(value)}")
+    """数値の設定を int にする ("420" のような文字列も受け付ける)。"""
     try:
-        return int(value)
+        number = None if isinstance(value, bool) else int(value)
     except (TypeError, ValueError):
-        raise ValueError(f"{name}: {json.dumps(value, ensure_ascii=False)}") from None
+        number = None
+    check(value, name, number is not None)
+    return number
+
+
+class Row(tk.Frame):
+    """トグルの 1 行。右端にスイッチ、その左に A / B のテキスト。
+    必要ならテキストの下にタイムスタンプ、その下にテキストボックス。"""
+
+    def __init__(self, app: "App", master, item: dict, index: int):
+        row_d, toggle_d = app.design["row"], app.design["toggle"]
+        pad = row_d["padding"]
+        super().__init__(master, bg=row_d["bg"], padx=pad, pady=pad)
+        self.app, self.item, self.row_d = app, item, row_d
+        self.pack(fill="x")
+        self.columnconfigure(0, weight=1)
+
+        self.label = tk.Label(self, bg=row_d["bg"], fg=row_d["fg"], font=app.text_font,
+                              anchor="w", justify="left")
+        self.label.grid(row=0, column=0, sticky="we", padx=(0, pad))
+
+        # タイムスタンプ: スイッチを切り替えたときだけ更新する
+        self.stamp = None
+        if as_bool(item["timestamp"], f"toggles[{index}].timestamp"):
+            format_jst(item["updated_at"], f"toggles[{index}].updated_at")  # 読めるか先に確かめる
+            self.stamp = tk.Label(self, bg=row_d["bg"], font=app.timestamp_font,
+                                  anchor="w", justify="left")
+            self.stamp.grid(row=1, column=0, sticky="we", padx=(0, pad), pady=(2, 0))
+
+        self.switch = app.make_switch(self, toggle_d, row_d["bg"], item["value"], self._on_toggle)
+        # タイムスタンプがあるときは、テキストとタイムスタンプの 2 段の真ん中に置く
+        self.switch.grid(row=0, column=1, rowspan=2 if self.stamp else 1, sticky="e")
+
+        if item["textbox"]:
+            self._build_textbox().grid(
+                row=2, column=0, columnspan=2, sticky="we", pady=(pad * 2 // 3, 0))
+
+        # 行の幅に合わせてテキストを折り返す。高さの自動計算に間に合うよう、
+        # 最初は設定上のウィンドウ幅 (カードの左右余白 16 を引く) から求めておく
+        def wrap_for(row_width: int) -> int:
+            return max(row_width - toggle_d["width"] - 3 * pad, 60)
+
+        self.label.config(
+            wraplength=wrap_for(as_int(app.design["window"]["width"], "window.width") - 32))
+        self.bind("<Configure>", lambda e: self.label.config(wraplength=wrap_for(e.width)))
+        self.refresh()
+
+    def _build_textbox(self) -> tk.Frame:
+        """1 行のテキストボックス。入力内容は item["text"] に入れて保存する。"""
+        tb_d, item = self.app.design["textbox"], self.item
+        if not isinstance(item["text"], str):
+            item["text"] = ""
+
+        # Entry は内側の余白を持てないので、枠線役の Frame で包む
+        box = tk.Frame(self, bg=tb_d["bg"], highlightthickness=1,
+                       highlightbackground=tb_d["border"], highlightcolor=tb_d["border"])
+        self.text_var = tk.StringVar(self, value=item["text"])   # 行が生きている間は残す
+        entry = tk.Entry(
+            box, textvariable=self.text_var, font=self.app.text_font,
+            bg=tb_d["bg"], fg=tb_d["fg"], insertbackground=tb_d["fg"],
+            relief="flat", borderwidth=0, highlightthickness=0,
+        )
+        entry.pack(fill="x", padx=8, pady=5)
+
+        def set_border(color: str) -> None:
+            box.config(highlightbackground=color, highlightcolor=color)
+
+        entry.bind("<FocusIn>", lambda _e: set_border(tb_d["focus_border"]), add="+")
+        entry.bind("<FocusOut>", lambda _e: set_border(tb_d["border"]), add="+")
+        # 枠の余白部分をクリックしても入力できるように
+        box.bind("<Button-1>", lambda _e: entry.focus_set())
+
+        def on_text(*_args) -> None:
+            item["text"] = self.text_var.get()
+            self.app.save_soon()
+
+        self.text_var.trace_add("write", on_text)
+        return box
+
+    def _on_toggle(self, value: bool) -> None:
+        self.set_value(value)
+        self.app.on_row_toggle()
+
+    def set_value(self, value: bool, when: str = None) -> None:
+        """状態を変えて出し直す。実際に切り替わったときだけタイムスタンプを更新する。"""
+        if value != self.item["value"]:
+            self.item["value"] = value
+            self.item["updated_at"] = when or now_jst()
+        if self.switch.get() != value:   # クリックで切り替わったときはスイッチ側で済んでいる
+            self.switch.set(value, notify=False)
+        self.refresh()
+
+    def refresh(self) -> None:
+        """true なら B、false なら A を出し、行の色を切り替える。タイムスタンプも出し直す。
+        スイッチの下地 (Canvas の背景) も行と同じ色にしないと、四角く浮いて見える。"""
+        row_d, item = self.row_d, self.item
+        if item["value"]:
+            text, bg, fg = item["b"], row_d["bg"], row_d["fg"]
+        else:
+            text, bg, fg = item["a"], row_d["bg_off"] or row_d["bg"], row_d["fg_off"] or row_d["fg"]
+        self.label.config(text=text, fg=fg, bg=bg)
+        self.config(bg=bg)
+        self.switch.config(bg=bg)
+        if self.stamp is not None:
+            self.stamp.config(text=format_jst(item["updated_at"], "updated_at"),
+                              fg=row_d["timestamp_fg"] or fg, bg=bg)
 
 
 class App(tk.Tk):
@@ -844,9 +885,8 @@ class App(tk.Tk):
         self.data = None
         self.design = None       # 標準スキン + 選んだスキン + ウインドウの大きさ
         self.content = None      # ヘッダー・カード・フッターをまとめた Frame。読み直すと作り直す
-        self.rows = []           # (item, スイッチ, ラベル, タイムスタンプ or None)
+        self.rows = []           # Row のリスト
         self.master_switch = None
-        self._text_vars = []     # テキストボックスの StringVar を生かしておく
         self._fonts = []
         self._save_after_id = None
         self._poll_after_id = None
@@ -855,22 +895,19 @@ class App(tk.Tk):
         self._skin_stamp = None
         self._width_setting = self._height_setting = None
 
-        # 旧形式からの移行で skins を作るより先に、サンプルを入れておく
         prepare_skins_dir()
 
         # data.json やスキンが読めないときに、上に出す帯
         self.banner = tk.Label(self, bg=self.ERROR_BG, fg=self.ERROR_FG,
                                justify="left", anchor="w", padx=16, pady=8)
 
-        data, error, migrated = read_data_file()
+        data, error = read_data_file()
         if data is None and error is None:     # 初回: 既定値で作る
             data = default_data()
             save_data(data)
         elif error:                            # 読めない: 上書きせず既定値で表示だけする
             data = default_data()
             self._data_error = error
-        elif migrated:                         # 旧形式から移した
-            save_data(data)
         self._file_stamp = file_stamp()
 
         build_error = self._render(data)
@@ -914,9 +951,9 @@ class App(tk.Tk):
 
     def _apply(self, data: dict, design: dict):
         """画面を作り直す。値がおかしくて作れなければ、前の画面のまま理由を返す。"""
-        old = (self.data, self.design, self.rows, self.master_switch, self._text_vars, self._fonts)
+        old = (self.data, self.design, self.rows, self.master_switch, self._fonts)
         self.data, self.design = data, design
-        self.rows, self._text_vars, self._fonts = [], [], []
+        self.rows, self._fonts = [], []
         frame = tk.Frame(self)
         try:
             win = design["window"]
@@ -926,8 +963,7 @@ class App(tk.Tk):
             self._build_content(frame)
         except BUILD_ERRORS as e:
             frame.destroy()
-            (self.data, self.design, self.rows, self.master_switch,
-             self._text_vars, self._fonts) = old
+            self.data, self.design, self.rows, self.master_switch, self._fonts = old
             if self.design:
                 self.configure(bg=self.design["window"]["bg"])
             return str(e) or type(e).__name__
@@ -958,7 +994,7 @@ class App(tk.Tk):
         for key in ("bg_off", "fg_off", "timestamp_fg"):
             if row_d[key] is not None:
                 self.winfo_rgb(row_d[key])
-        radius = as_radius(toggle_d["radius"], "toggle.radius")
+        as_radius(toggle_d["radius"], "toggle.radius")
 
         self.configure(bg=win["bg"])
         frame.configure(bg=win["bg"])
@@ -978,20 +1014,10 @@ class App(tk.Tk):
         header.pack(fill="x")
         self.master_switch = None
         if show_master:
-            self.master_switch = ToggleSwitch(
-                header,
-                # 起動時にスライドして見えないよう、最初から状態を合わせておく
-                value=any(t["value"] for t in self.data["toggles"]),
-                command=self.on_master_toggle,
-                bg=header_d["bg"],
-                width=toggle_d["width"],
-                height=toggle_d["height"],
-                on_color=header_toggle_d["on_color"],
-                off_color=header_toggle_d["off_color"],
-                knob_color=header_toggle_d["knob_color"],
-                knob_outline=header_toggle_d["knob_outline"],
-                radius=radius,
-            )
+            # 起動時にスライドして見えないよう、最初から状態を合わせておく
+            self.master_switch = self.make_switch(
+                header, header_toggle_d, header_d["bg"],
+                any(t["value"] for t in self.data["toggles"]), self.on_master_toggle)
         align = as_align(header_d["align"], "header.align")
         if self.master_switch is not None:
             # 先に右へ置き、タイトルが長くてもスイッチが押し出されないようにする
@@ -1011,7 +1037,7 @@ class App(tk.Tk):
         for i, item in enumerate(self.data["toggles"]):
             if i:
                 tk.Frame(card, bg=row_d["separator"], height=1).pack(fill="x")
-            self.rows.append(self._build_row(card, item, i))
+            self.rows.append(Row(self, card, item, i))
         self._sync_master()
 
         # フッター: data.json を開く / フォルダを表示 / スキン。
@@ -1032,100 +1058,16 @@ class App(tk.Tk):
             link.bind("<Enter>", lambda _e, w=link: w.config(font=link_hover_font))
             link.bind("<Leave>", lambda _e, w=link: w.config(font=link_font))
 
-    def _build_row(self, master, item: dict, index: int) -> tuple:
-        """右端にトグル、その左に A / B のテキスト。
-        必要ならテキストの下にタイムスタンプ、その下にテキストボックス。"""
-        row_d = self.design["row"]
+    def make_switch(self, master, colors: dict, bg: str, value: bool, command) -> ToggleSwitch:
+        """スイッチを作る。大きさと形は design.toggle、色は colors から取る。"""
         toggle_d = self.design["toggle"]
-        pad = row_d["padding"]
-
-        row = tk.Frame(master, bg=row_d["bg"], padx=pad, pady=pad)
-        row.pack(fill="x")
-        row.columnconfigure(0, weight=1)
-
-        label = tk.Label(
-            row, bg=row_d["bg"], fg=row_d["fg"], font=self.text_font,
-            anchor="w", justify="left",
-        )
-        label.grid(row=0, column=0, sticky="we", padx=(0, pad))
-
-        # タイムスタンプ: スイッチを切り替えたときだけ更新する
-        stamp = None
-        if as_bool(item["timestamp"], f"toggles[{index}].timestamp"):
-            format_jst(item["updated_at"], f"toggles[{index}].updated_at")  # 読めるか先に確かめる
-            stamp = tk.Label(row, bg=row_d["bg"], font=self.timestamp_font,
-                             anchor="w", justify="left")
-            stamp.grid(row=1, column=0, sticky="we", padx=(0, pad), pady=(2, 0))
-
-        def on_toggle(value: bool) -> None:
-            item["value"] = value
-            item["updated_at"] = now_jst()
-            self.update_row(item, switch, label, stamp)
-            self._sync_master()
-            self.save()
-
-        switch = ToggleSwitch(
-            row,
-            value=item["value"],
-            command=on_toggle,
-            bg=row_d["bg"],
-            width=toggle_d["width"],
-            height=toggle_d["height"],
-            on_color=toggle_d["on_color"],
-            off_color=toggle_d["off_color"],
-            knob_color=toggle_d["knob_color"],
-            knob_outline=toggle_d["knob_outline"],
+        return ToggleSwitch(
+            master, value=value, command=command, bg=bg,
+            width=toggle_d["width"], height=toggle_d["height"],
             radius=as_radius(toggle_d["radius"], "toggle.radius"),
+            on_color=colors["on_color"], off_color=colors["off_color"],
+            knob_color=colors["knob_color"], knob_outline=colors["knob_outline"],
         )
-        # タイムスタンプがあるときは、テキストとタイムスタンプの 2 段の真ん中に置く
-        switch.grid(row=0, column=1, rowspan=2 if stamp else 1, sticky="e")
-
-        if item["textbox"]:
-            self._build_textbox(row, item).grid(
-                row=2, column=0, columnspan=2, sticky="we", pady=(pad * 2 // 3, 0))
-
-        # 行の幅に合わせてテキストを折り返す。高さの自動計算に間に合うよう、
-        # 最初は設定上のウィンドウ幅 (カードの左右余白 16 を引く) から求めておく
-        def wrap_for(row_width: int) -> int:
-            return max(row_width - toggle_d["width"] - 3 * pad, 60)
-
-        label.config(wraplength=wrap_for(as_int(self.design["window"]["width"], "window.width") - 32))
-        row.bind("<Configure>", lambda e: label.config(wraplength=wrap_for(e.width)))
-        self.update_row(item, switch, label, stamp)
-        return item, switch, label, stamp
-
-    def _build_textbox(self, master, item: dict) -> tk.Frame:
-        """1 行のテキストボックス。入力内容は item["text"] に入れて保存する。"""
-        tb_d = self.design["textbox"]
-        if not isinstance(item["text"], str):
-            item["text"] = ""
-
-        # Entry は内側の余白を持てないので、枠線役の Frame で包む
-        box = tk.Frame(master, bg=tb_d["bg"], highlightthickness=1,
-                       highlightbackground=tb_d["border"], highlightcolor=tb_d["border"])
-        var = tk.StringVar(self, value=item["text"])
-        self._text_vars.append(var)
-        entry = tk.Entry(
-            box, textvariable=var, font=self.text_font,
-            bg=tb_d["bg"], fg=tb_d["fg"], insertbackground=tb_d["fg"],
-            relief="flat", borderwidth=0, highlightthickness=0,
-        )
-        entry.pack(fill="x", padx=8, pady=5)
-
-        def set_border(color: str) -> None:
-            box.config(highlightbackground=color, highlightcolor=color)
-
-        entry.bind("<FocusIn>", lambda _e: set_border(tb_d["focus_border"]), add="+")
-        entry.bind("<FocusOut>", lambda _e: set_border(tb_d["border"]), add="+")
-        # 枠の余白部分をクリックしても入力できるように
-        box.bind("<Button-1>", lambda _e: entry.focus_set())
-
-        def on_text(*_args) -> None:
-            item["text"] = var.get()
-            self._schedule_save()
-
-        var.trace_add("write", on_text)
-        return box
 
     def _fit_window(self, keep_width: bool = True) -> None:
         """高さを中身 (か設定値) に合わせる。keep_width なら幅は今のまま。"""
@@ -1248,27 +1190,11 @@ class App(tk.Tk):
             widget.event_generate(virtual_event)
 
     # ---- 表示更新 ----
-    def update_row(self, item: dict, switch: "ToggleSwitch", label: tk.Label,
-                   stamp=None) -> None:
-        """true なら B、false なら A を出し、行の色を切り替える。タイムスタンプも出し直す。
-        スイッチの下地 (Canvas の背景) も行と同じ色にしないと、四角く浮いて見える。"""
-        row_d = self.design["row"]
-        if item["value"]:
-            text, bg, fg = item["b"], row_d["bg"], row_d["fg"]
-        else:
-            text, bg, fg = item["a"], row_d["bg_off"] or row_d["bg"], row_d["fg_off"] or row_d["fg"]
-        label.config(text=text, fg=fg, bg=bg)
-        label.master.config(bg=bg)
-        switch.config(bg=bg)
-        if stamp is not None:
-            stamp.config(text=format_jst(item["updated_at"], "updated_at"),
-                         fg=row_d["timestamp_fg"] or fg, bg=bg)
-
     def _sync_master(self) -> None:
         """一括スイッチはリストのどれかが true の間だけ ON。全部 false なら OFF のまま動かない。"""
         if self.master_switch is None:   # show_bulk_switch が false で出していない
             return
-        any_on = any(item["value"] for item, *_widgets in self.rows)
+        any_on = any(row.item["value"] for row in self.rows)
         self.master_switch.set(any_on, notify=False)
         self.master_switch.set_enabled(any_on)
 
@@ -1287,7 +1213,7 @@ class App(tk.Tk):
         if save_data(self.data):
             self._file_stamp = file_stamp()
 
-    def _schedule_save(self) -> None:
+    def save_soon(self) -> None:
         if self._save_after_id:
             self.after_cancel(self._save_after_id)
         self._save_after_id = self.after(self.SAVE_DELAY_MS, self._save_later)
@@ -1310,15 +1236,13 @@ class App(tk.Tk):
         if self._save_after_id:   # 保存待ちのアプリ側の入力より、外での編集を優先する
             self.after_cancel(self._save_after_id)
             self._save_after_id = None
-        data, error, migrated = read_data_file()
+        data, error = read_data_file()
         if data is None and error is None:
             return  # 消された: 次に保存するときに作り直す
         if error:
             self._data_error = error
             self._show_errors()
             return
-        if migrated and save_data(data):
-            self._file_stamp = file_stamp()
         old_width = self._width_setting
         build_error = self._render(data)
         self._data_error = (("error_values", {"file": "data.json", "msg": build_error})
@@ -1353,12 +1277,13 @@ class App(tk.Tk):
             self._sync_master()
             return
         now = now_jst()
-        for item, switch, label, stamp in self.rows:
-            if item["value"]:   # 実際に切り替わった行だけタイムスタンプを更新する
-                item["value"] = False
-                item["updated_at"] = now
-            switch.set(False, notify=False)
-            self.update_row(item, switch, label, stamp)
+        for row in self.rows:
+            row.set_value(False, now)
+        self._sync_master()
+        self.save()
+
+    def on_row_toggle(self) -> None:
+        """行のスイッチが切り替わったとき。"""
         self._sync_master()
         self.save()
 
